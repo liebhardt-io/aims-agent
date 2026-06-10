@@ -5,8 +5,8 @@
 > Turn a prompt into a finished image or video, right from your agent:
 > *"Make a 16:9 image of a red panda astronaut, then a 6-second video panning across it."*
 
-- 🧩 **MCP server** — `@aims/mcp`, runnable with `npx`
-- 🖥️ **CLI** — `@aims/cli`, the `aims` command
+- 🧩 **MCP server** — `@ai-media-studio/mcp`, runnable with `npx`
+- 🖥️ **CLI** — `@ai-media-studio/cli`, the `aims` command
 - 🛠️ **Skills** — drop-in Claude Code skills for generating & editing media
 - 🔌 **Plain HTTP** — it's just `POST /api/v1/...` with a Bearer token
 
@@ -40,7 +40,7 @@ This installs the skills **and** registers the `aims` MCP server. Set `AIMS_API_
 ### 3. MCP server
 
 ```bash
-claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @aims/mcp@latest aims-mcp
+claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
 ```
 
 Restart Claude Code, then: *"Use aims to generate a video of waves at sunset."* See [`packages/mcp`](packages/mcp/README.md).
@@ -48,7 +48,7 @@ Restart Claude Code, then: *"Use aims to generate a video of waves at sunset."* 
 ### 4. CLI
 
 ```bash
-npm install -g @aims/cli
+npm install -g @ai-media-studio/cli
 aims login
 aims image "a red panda astronaut, studio lighting" -a 16:9 --output ./out
 aims video "drone shot over snowy mountains at sunrise" -d 6 --output ./out
@@ -74,9 +74,9 @@ Full reference: [`reference/api.md`](reference/api.md).
 ```
 aims-agent/
 ├── packages/
-│   ├── core/        @aims/core — shared API client + types
-│   ├── mcp/         @aims/mcp  — MCP server (bin: aims-mcp)
-│   └── cli/         @aims/cli  — CLI (bin: aims)
+│   ├── core/        @ai-media-studio/core — shared API client + types
+│   ├── mcp/         @ai-media-studio/mcp  — MCP server (bin: aims-mcp)
+│   └── cli/         @ai-media-studio/cli  — CLI (bin: aims)
 ├── skills/          Agent Skills (generate image / generate video / edit image)
 ├── reference/       api.md · authentication.md · models.md · prompting.md
 ├── .claude-plugin/  plugin.json + marketplace.json (Claude Code plugin)
@@ -120,7 +120,7 @@ node packages/cli/dist/index.js whoami                  # CLI
 
 ## Publishing
 
-The packages depend on `@aims/core`, so publish in order:
+The packages depend on `@ai-media-studio/core`, so publish in order:
 
 ```bash
 cd packages/core && npm publish --access public

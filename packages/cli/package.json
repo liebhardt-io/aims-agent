@@ -1,5 +1,5 @@
 {
-  "name": "@aims/cli",
+  "name": "@ai-media-studio/cli",
   "version": "0.1.0",
   "description": "Command-line tool to generate images and videos with AI Media Studio (AIMS).",
   "license": "Apache-2.0",
@@ -31,7 +31,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@aims/core": "workspace:^",
+    "@ai-media-studio/core": "workspace:^",
     "commander": "^12.1.0"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@
  * `aims` — command-line tool for AI Media Studio.
  *
  * Quick start:
- *   npm install -g @aims/cli
+ *   npm install -g @ai-media-studio/cli
  *   aims login                      # paste your aims_ API key
  *   aims image "a red panda astronaut, studio lighting" --output ./out
  *   aims video "a drone shot over snowy mountains at sunrise" --duration 6
@@ -12,12 +12,12 @@
 import { Command } from "commander"
 import * as readline from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
-import { AimsApiError, AimsClient, DEFAULT_BASE_URL } from "@aims/core"
+import { AimsApiError, AimsClient, DEFAULT_BASE_URL } from "@ai-media-studio/core"
 import type {
   ImageGenerateParams,
   ModelInfo,
   VideoGenerateParams,
-} from "@aims/core"
+} from "@ai-media-studio/core"
 import {
   configPath,
   readConfig,

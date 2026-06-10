@@ -1,5 +1,5 @@
 {
-  "name": "@aims/mcp",
+  "name": "@ai-media-studio/mcp",
   "version": "0.1.0",
   "description": "MCP server for AI Media Studio (AIMS) — generate images and videos from any MCP-compatible agent (Claude Code, Cursor, Claude Desktop).",
   "license": "Apache-2.0",
@@ -32,7 +32,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@aims/core": "workspace:^",
+    "@ai-media-studio/core": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.23.8"
   },

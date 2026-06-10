@@ -7,7 +7,7 @@
  * registering the server). Optionally override the API base URL with AIMS_BASE_URL.
  *
  * Register with Claude Code:
- *   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @aims/mcp@latest aims-mcp
+ *   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
@@ -20,7 +20,7 @@ import {
   type ImageGenerateParams,
   type ModelInfo,
   type VideoGenerateParams,
-} from "@aims/core"
+} from "@ai-media-studio/core"
 
 const PACKAGE_VERSION = "0.1.0"
 
@@ -29,7 +29,7 @@ function getClient(): AimsClient {
   if (!apiKey) {
     throw new Error(
       "AIMS_API_KEY is not set. Provide it when registering the server, e.g.\n" +
-        "  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @aims/mcp@latest aims-mcp\n" +
+        "  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp\n" +
         "Create a key in AI Media Studio under Workspace Settings → API Keys.",
     )
   }

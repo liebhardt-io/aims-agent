@@ -1,11 +1,11 @@
-# @aims/mcp
+# @ai-media-studio/mcp
 
 MCP server for [AI Media Studio (AIMS)](https://app.ai-media-studio.com). Generate and edit images and videos from any MCP-compatible agent — Claude Code, Cursor, or Claude Desktop.
 
 ## Install (Claude Code)
 
 ```bash
-claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @aims/mcp@latest aims-mcp
+claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
 ```
 
 Then restart Claude Code. Get an API key in AIMS → **Workspace Settings → API Keys**.
@@ -17,7 +17,7 @@ Then restart Claude Code. Get an API key in AIMS → **Workspace Settings → AP
   "mcpServers": {
     "aims": {
       "command": "npx",
-      "args": ["-y", "-p", "@aims/mcp@latest", "aims-mcp"],
+      "args": ["-y", "-p", "@ai-media-studio/mcp@latest", "aims-mcp"],
       "env": { "AIMS_API_KEY": "aims_xxx" }
     }
   }

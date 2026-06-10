@@ -3,7 +3,7 @@
     "aims": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "-p", "@aims/mcp@latest", "aims-mcp"],
+      "args": ["-y", "-p", "@ai-media-studio/mcp@latest", "aims-mcp"],
       "env": {
         "AIMS_API_KEY": "${AIMS_API_KEY}"
       }

@@ -1,5 +1,5 @@
 {
-  "name": "@aims/core",
+  "name": "@ai-media-studio/core",
   "version": "0.1.0",
   "description": "Shared API client and TypeScript types for the AIMS (AI Media Studio) agent toolkit.",
   "license": "Apache-2.0",

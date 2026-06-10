@@ -17,7 +17,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@aims/core':
+      '@ai-media-studio/core':
         specifier: workspace:^
         version: link:../core
       commander:
@@ -42,7 +42,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      '@aims/core':
+      '@ai-media-studio/core':
         specifier: workspace:^
         version: link:../core
       '@modelcontextprotocol/sdk':

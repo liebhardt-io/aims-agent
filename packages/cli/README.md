@@ -1,11 +1,11 @@
-# @aims/cli
+# @ai-media-studio/cli
 
 Command-line tool to generate images and videos with [AI Media Studio (AIMS)](https://app.ai-media-studio.com).
 
 ## Install
 
 ```bash
-npm install -g @aims/cli
+npm install -g @ai-media-studio/cli
 ```
 
 ## Authenticate
@@ -44,6 +44,6 @@ Run `aims --help` or `aims <command> --help` for all options.
 
 ## Prefer agents over a shell?
 
-`@aims/cli` and the [`@aims/mcp`](https://www.npmjs.com/package/@aims/mcp) MCP server share the same client and the same API key. Install `@aims/mcp` to call the exact same generation tools from Claude Code, Cursor, or Claude Desktop.
+`@ai-media-studio/cli` and the [`@ai-media-studio/mcp`](https://www.npmjs.com/package/@ai-media-studio/mcp) MCP server share the same client and the same API key. Install `@ai-media-studio/mcp` to call the exact same generation tools from Claude Code, Cursor, or Claude Desktop.
 
 Apache-2.0
