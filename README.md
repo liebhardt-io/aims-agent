@@ -74,7 +74,7 @@ Full reference: [`reference/api.md`](reference/api.md).
 ```
 aims-agent/
 ├── packages/
-│   ├── core/        @ai-media-studio/core — shared API client + types
+│   ├── core/        shared API client + types (internal — bundled into mcp & cli, not published)
 │   ├── mcp/         @ai-media-studio/mcp  — MCP server (bin: aims-mcp)
 │   └── cli/         @ai-media-studio/cli  — CLI (bin: aims)
 ├── skills/          Agent Skills (generate image / generate video / edit image)
@@ -120,15 +120,14 @@ node packages/cli/dist/index.js whoami                  # CLI
 
 ## Publishing
 
-The packages depend on `@ai-media-studio/core`, so publish in order:
+`@ai-media-studio/core` is internal and **bundled** into the published packages (it is marked private and is not published). Only `@ai-media-studio/mcp` and `@ai-media-studio/cli` go to npm:
 
 ```bash
-cd packages/core && npm publish --access public
-cd ../mcp && npm publish --access public
-cd ../cli && npm publish --access public
+pnpm -r build
+pnpm -r publish --access public --no-git-checks   # core is private → skipped
 ```
 
-Until published to npm, the GitHub-based installs (`npx skills add …`, `claude plugin marketplace add …`) work directly from this repo.
+The GitHub-based installs (`npx skills add …`, `claude plugin marketplace add …`) work directly from this repo without npm.
 
 ## License
 

@@ -22,7 +22,7 @@ import {
   type VideoGenerateParams,
 } from "@ai-media-studio/core"
 
-const PACKAGE_VERSION = "0.1.0"
+const PACKAGE_VERSION = "0.1.1"
 
 function getClient(): AimsClient {
   const apiKey = resolveApiKey()

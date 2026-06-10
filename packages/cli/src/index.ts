@@ -32,7 +32,7 @@ import {
   downloadTo,
 } from "./output.js"
 
-const VERSION = "0.1.0"
+const VERSION = "0.1.1"
 const KEYS_HELP =
   "Create an API key in AI Media Studio → Workspace Settings → API Keys."
 
