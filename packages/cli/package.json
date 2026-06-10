@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Command-line tool to generate images and videos with AI Media Studio (AIMS).",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liebhardt-io/aims-agent.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/liebhardt-io/aims-agent#readme",
   "type": "module",
   "bin": {
     "aims": "./dist/index.js"

@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "MCP server for AI Media Studio (AIMS) — generate images and videos from any MCP-compatible agent (Claude Code, Cursor, Claude Desktop).",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liebhardt-io/aims-agent.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/liebhardt-io/aims-agent#readme",
   "type": "module",
   "bin": {
     "aims-mcp": "./dist/index.js"
