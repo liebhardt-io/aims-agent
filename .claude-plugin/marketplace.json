@@ -1,0 +1,24 @@
+{
+  "name": "aims",
+  "owner": {
+    "name": "liebhardt.io",
+    "url": "https://github.com/liebhardt-io"
+  },
+  "plugins": [
+    {
+      "name": "aims",
+      "owner": "liebhardt-io",
+      "source": {
+        "source": "github",
+        "repo": "liebhardt-io/aims-agent",
+        "path": "./"
+      },
+      "version": "0.1.0",
+      "displayName": "AI Media Studio (AIMS)",
+      "description": "Generate images and videos with AI Media Studio. Bundles an MCP server and skills so agents can create and edit media.",
+      "homepage": "https://github.com/liebhardt-io/aims-agent",
+      "license": "Apache-2.0",
+      "keywords": ["ai", "image-generation", "video-generation", "mcp"]
+    }
+  ]
+}

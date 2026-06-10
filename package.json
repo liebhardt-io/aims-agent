@@ -1,0 +1,28 @@
+{
+  "name": "aims-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generate images and videos with AI agents — MCP server, CLI, and Claude Code skills for AI Media Studio (AIMS).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "homepage": "https://github.com/liebhardt-io/aims-agent",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liebhardt-io/aims-agent.git"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean",
+    "mcp": "node packages/mcp/dist/index.js",
+    "cli": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/node": "^22.10.0"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=18"
+  }
+}
