@@ -1,6 +1,6 @@
 {
   "name": "@ai-media-studio/cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Command-line tool to generate images and videos with AI Media Studio (AIMS).",
   "license": "Apache-2.0",
   "repository": {
@@ -25,7 +25,7 @@
     "ai-media-studio"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --clean --target node18 --platform node",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
     "start": "node dist/index.js"

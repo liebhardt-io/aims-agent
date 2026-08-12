@@ -7,8 +7,8 @@ description: Generate images from a text prompt with AI Media Studio (AIMS). Use
 
 Create images via the AIMS API. There are three ways to call it — **prefer the first one that is available**:
 
-1. **MCP tool** `generate_image` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `aspect_ratio`, `size`, `n`, `resolution`, `output_format`, `quality`, `style_slug`, `seed`, `image_urls`, `make_public`.
-2. **CLI** `aims image "<prompt>" [options]` — if the `aims` CLI is installed and the user has run `aims login` (or `AIMS_API_KEY` is set).
+1. **MCP tool** `generate_image` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `aspect_ratio`, `size`, `n`, `resolution`, `output_format`, `quality`, `style_slug`, `seed`, `image_urls`, `make_public`. The tool returns JSON (`url`, `id`, `credits_used`).
+2. **CLI** `aims image "<prompt>" --json` — if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Never run `aims login` without `--key`.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/images/generate` with `Authorization: Bearer $AIMS_API_KEY`.
 
 ## Inputs to gather
@@ -69,7 +69,7 @@ Response (abridged):
 ## CLI example
 
 ```bash
-aims image "a minimalist logo of a mountain, flat vector" -m fal-ai/nano-banana-2 -a 1:1 --output ./out
+aims image "a minimalist logo of a mountain, flat vector" -m fal-ai/nano-banana-2 -a 1:1 --json
 ```
 
 ## Notes

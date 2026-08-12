@@ -7,8 +7,8 @@ description: Edit, transform, restyle, or combine existing images with a text in
 
 Transform existing images with a text instruction. This uses the same image endpoint with `image_urls` supplied. **Prefer the first available method:**
 
-1. **MCP tool** `edit_image` — pass `prompt` and `image_urls` (1–10 http/https URLs).
-2. **CLI** `aims edit "<instruction>" --image-url <url> [--image-url <url> …]`.
+1. **MCP tool** `edit_image` — pass `prompt` and `image_urls` (1–10 http/https URLs). Returns JSON.
+2. **CLI** `aims edit "<instruction>" --image-url <url> --json`.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/images/generate` with an `image_urls` array.
 
 ## Inputs to gather
@@ -45,7 +45,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/images/generate \
 aims edit "combine these into a single product collage on a white background" \
   --image-url https://example.com/a.jpg \
   --image-url https://example.com/b.jpg \
-  --output ./out
+  --json
 ```
 
 ## Notes

@@ -1,7 +1,7 @@
 {
   "name": "aims",
   "displayName": "AI Media Studio (AIMS)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Generate images and videos with AI Media Studio. Bundles an MCP server and skills so agents can create and edit media.",
   "author": {
     "name": "liebhardt.io",

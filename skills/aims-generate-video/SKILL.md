@@ -7,8 +7,8 @@ description: Generate videos from a text prompt (or a source image) with AI Medi
 
 Create videos via the AIMS API. **Prefer the first available method:**
 
-1. **MCP tool** `generate_video` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `duration`, `aspect_ratio`, `audio`, `image_url`, `image_urls`, `resolution`, `negative_prompt`, `make_public`.
-2. **CLI** `aims video "<prompt>" [options]` — if the `aims` CLI is installed (`aims login` or `AIMS_API_KEY`).
+1. **MCP tool** `generate_video` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `duration`, `aspect_ratio`, `audio`, `image_url`, `image_urls`, `resolution`, `negative_prompt`, `make_public`. Returns JSON (`url`, `credits_used`).
+2. **CLI** `aims video "<prompt>" --duration 6 --json` — if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Never run `aims login` without `--key`.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/videos/generate` with `Authorization: Bearer $AIMS_API_KEY`.
 
 ## Inputs to gather
@@ -75,7 +75,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/videos/generate \
 ## CLI example
 
 ```bash
-aims video "a timelapse of clouds over a city skyline" -m fal-ai/veo3.1/fast -d 6 -a 16:9 --output ./out
+aims video "a timelapse of clouds over a city skyline" -m fal-ai/veo3.1/fast -d 6 -a 16:9 --json
 ```
 
 ## Notes

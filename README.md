@@ -1,6 +1,6 @@
 # aims-agent
 
-**Generate images and videos with AI agents.** `aims-agent` makes [AI Media Studio (AIMS)](https://app.ai-media-studio.com) available to Claude Code, Cursor, Claude Desktop, and any MCP or HTTP agent — through an **MCP server**, a **CLI**, and **Agent Skills**, all backed by the same API key.
+**Generate images and videos with AI agents.** `aims-agent` makes [AI Media Studio (AIMS)](https://app.ai-media-studio.com) available to Claude Code, Cursor, Codex, Claude Desktop, and any MCP or HTTP agent — through an **MCP server**, a **CLI**, and **Agent Skills**, all backed by the same API key.
 
 > Turn a prompt into a finished image or video, right from your agent:
 > *"Make a 16:9 image of a red panda astronaut, then a 6-second video panning across it."*
@@ -49,9 +49,9 @@ Restart Claude Code, then: *"Use aims to generate a video of waves at sunset."* 
 
 ```bash
 npm install -g @ai-media-studio/cli
-aims login
-aims image "a red panda astronaut, studio lighting" -a 16:9 --output ./out
-aims video "drone shot over snowy mountains at sunrise" -d 6 --output ./out
+aims login --key aims_xxx
+aims image "a red panda astronaut, studio lighting" -a 16:9 --json
+aims video "drone shot over snowy mountains at sunrise" -d 6 --json
 ```
 
 See [`packages/cli`](packages/cli/README.md).
@@ -73,6 +73,7 @@ Full reference: [`reference/api.md`](reference/api.md).
 
 ```
 aims-agent/
+├── AGENTS.md        how coding agents should call the CLI and MCP
 ├── packages/
 │   ├── core/        shared API client + types (internal — bundled into mcp & cli, not published)
 │   ├── mcp/         @ai-media-studio/mcp  — MCP server (bin: aims-mcp)
@@ -87,11 +88,11 @@ aims-agent/
 
 | | MCP tool | CLI | HTTP |
 | --- | --- | --- | --- |
-| Text-to-image | `generate_image` | `aims image` | `POST /images/generate` |
-| Image-to-image edit | `edit_image` | `aims edit` | `POST /images/generate` + `image_urls` |
-| Text/image-to-video | `generate_video` | `aims video` | `POST /videos/generate` |
-| List models | `list_models` | `aims models` | `GET /models` |
-| Account & credits | `get_account` | `aims whoami` | `GET /images/generate` |
+| Text-to-image | `generate_image` | `aims image --json` | `POST /images/generate` |
+| Image-to-image edit | `edit_image` | `aims edit --json` | `POST /images/generate` + `image_urls` |
+| Text/image-to-video | `generate_video` | `aims video --json` | `POST /videos/generate` |
+| List models | `list_models` | `aims models --json` | `GET /models` |
+| Account & credits | `get_account` | `aims whoami --json` | `GET /images/generate` |
 
 > **Note:** Image-to-video and reference-to-video use dedicated model ids (e.g. `fal-ai/veo3.1/fast/image-to-video`). Pass `image_url` (or `image_urls`) together with that model id. Use `list_models` / `aims models` / `GET /models` to discover them.
 
@@ -104,7 +105,9 @@ Discover live models and pricing any time — see [`reference/models.md`](refere
 | `AIMS_API_KEY` | — | Your `aims_` key (required). |
 | `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL. |
 
-The CLI also persists the key at `~/.aims/config.json` (mode `600`) via `aims login`.
+The CLI also persists the key at `~/.aims/config.json` (mode `600`) via `aims login --key`. Agents should always pass `--key` or `AIMS_API_KEY` — `aims login` only prompts when stdin is a TTY.
+
+See [AGENTS.md](AGENTS.md) for the agent-oriented CLI/MCP contract (`--json`, `--stdin`, `--dry-run`, `aims-mcp --list-tools`).
 
 ## Develop
 

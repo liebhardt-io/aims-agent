@@ -2,108 +2,126 @@
 /**
  * `aims` — command-line tool for AI Media Studio.
  *
- * Quick start:
- *   npm install -g @ai-media-studio/cli
- *   aims login                      # paste your aims_ API key
- *   aims image "a red panda astronaut, studio lighting" --output ./out
- *   aims video "a drone shot over snowy mountains at sunrise" --duration 6
- *   aims models --type image
+ * Non-interactive first. Every input is a flag. Run `aims <command> --help`
+ * for examples.
  */
 import { Command } from "commander"
 import * as readline from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
-import { AimsApiError, AimsClient, DEFAULT_BASE_URL } from "@ai-media-studio/core"
-import type {
-  ImageGenerateParams,
-  ModelInfo,
-  VideoGenerateParams,
+import {
+  AimsClient,
+  DEFAULT_BASE_URL,
+  LOGIN_EXAMPLE,
+  type ImageGenerateParams,
+  type ModelInfo,
+  type VideoGenerateParams,
 } from "@ai-media-studio/core"
-import {
-  configPath,
-  readConfig,
-  resolveApiKey,
-  resolveBaseUrl,
-  writeConfig,
-} from "./config.js"
-import {
-  collect,
-  parseIntOption,
-  resolveOutputPath,
-  downloadTo,
-} from "./output.js"
+import { configPath, readConfig, resolveApiKey, resolveBaseUrl, writeConfig } from "./config.js"
+import { collect, parseIntOption, resolveOutputPath, downloadTo } from "./output.js"
+import { die, handleError, requireApiKey, usage } from "./errors.js"
+import { isInteractive, resolvePrompt } from "./prompt.js"
+import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
 
-const VERSION = "0.1.1"
-const KEYS_HELP =
-  "Create an API key in AI Media Studio → Workspace Settings → API Keys."
+const VERSION = "0.2.0"
 
 interface GlobalOpts {
   key?: string
   baseUrl?: string
   json?: boolean
-}
-
-function die(message: string): never {
-  process.stderr.write(`${message}\n`)
-  process.exit(1)
-}
-
-function handleError(err: unknown): never {
-  if (err instanceof AimsApiError) {
-    let hint = ""
-    if (err.status === 401) hint = `\n${KEYS_HELP} Then run \`aims login\`.`
-    if (err.status === 402) hint = "\nYour workspace is out of credits."
-    if (err.status === 403) hint = "\nYour API key is missing the required scope for this action."
-    die(`AIMS API error (${err.status}): ${err.message}${hint}`)
-  }
-  die(`Error: ${(err as Error)?.message ?? String(err)}`)
+  print?: string
+  quiet?: boolean
 }
 
 function makeClient(opts: GlobalOpts): AimsClient {
-  const apiKey = resolveApiKey(opts.key)
-  if (!apiKey) {
-    die(
-      `No API key found. Run \`aims login\`, set AIMS_API_KEY, or pass --key.\n${KEYS_HELP}`,
-    )
-  }
+  const apiKey = requireApiKey(resolveApiKey(opts.key))
   return new AimsClient({ apiKey, baseUrl: resolveBaseUrl(opts.baseUrl) })
 }
 
-async function prompt(question: string): Promise<string> {
+function modeOf(g: GlobalOpts): PrintMode {
+  try {
+    return resolvePrintMode(g)
+  } catch (err) {
+    usage((err as Error).message)
+  }
+}
+
+async function promptTty(question: string): Promise<string> {
   const rl = readline.createInterface({ input, output })
   try {
-    const answer = await rl.question(question)
-    return answer.trim()
+    return (await rl.question(question)).trim()
   } finally {
     rl.close()
   }
+}
+
+async function saveDownloads(
+  urls: string[],
+  dest: string,
+  fallbackExt: string,
+): Promise<string[]> {
+  const saved: string[] = []
+  for (const [i, url] of urls.entries()) {
+    const path = resolveOutputPath(dest, url, i + 1, fallbackExt, urls.length > 1)
+    await downloadTo(url, path)
+    saved.push(path)
+  }
+  return saved
 }
 
 const program = new Command()
 
 program
   .name("aims")
-  .description(
-    "Generate images and videos with AI Media Studio from the command line.",
-  )
+  .description("Generate images and videos with AI Media Studio from the command line.")
   .version(VERSION, "-v, --version")
   .option("--key <key>", "API key (overrides env and saved config)")
   .option("--base-url <url>", `API base URL (default ${DEFAULT_BASE_URL})`)
-  .option("--json", "output raw JSON responses", false)
+  .option("--json", "print JSON (same as --print json)", false)
+  .option("--print <format>", "text | json | url  (url prints result URL(s) only)")
+  .option("--quiet", "suppress progress on stderr", false)
+  .showHelpAfterError(false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims login --key aims_xxx
+  aims whoami --json
+  aims models --type image --json
+  aims image "a red panda astronaut, studio lighting" --aspect-ratio 16:9 --json
+  echo "a red panda astronaut" | aims image --stdin --json
+  aims video "drone shot over snowy mountains" --duration 6 --dry-run --json
+
+Discovery:
+  aims <command> --help
+`,
+  )
 
 // ---------------------------------------------------------------------------
 // login
 // ---------------------------------------------------------------------------
 program
   .command("login")
-  .description("Save and validate your AIMS API key")
-  .action(async (_opts, command: Command) => {
+  .description("Save and validate an AIMS API key (idempotent)")
+  .option("--key <key>", "API key to save (preferred; skips the prompt)")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims login --key aims_xxx
+  AIMS_API_KEY=aims_xxx aims login
+  aims login --key aims_xxx --json
+`,
+  )
+  .action(async (opts: { key?: string }, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    let key = g.key || process.env.AIMS_API_KEY
+    let key = opts.key || g.key || process.env.AIMS_API_KEY
     if (!key) {
-      process.stdout.write(`${KEYS_HELP}\n`)
-      key = await prompt("Paste your AIMS API key (aims_...): ")
+      if (!isInteractive()) {
+        usage(`No API key specified.\n  ${LOGIN_EXAMPLE}\n  AIMS_API_KEY=aims_xxx aims login`)
+      }
+      key = await promptTty("Paste your AIMS API key (aims_...): ")
     }
-    if (!key) die("No API key provided.")
+    if (!key) usage(`No API key provided.\n  ${LOGIN_EXAMPLE}`)
 
     const client = new AimsClient({ apiKey: key, baseUrl: resolveBaseUrl(g.baseUrl) })
     try {
@@ -113,10 +131,15 @@ program
         apiKey: key,
         baseUrl: g.baseUrl || existing.baseUrl,
       })
-      process.stdout.write(
-        `Logged in. Workspace ${status.workspace_id} — ${status.credits_available} credits available.\n` +
-          `Saved to ${path}\n`,
-      )
+      const payload = {
+        logged_in: true,
+        workspace_id: status.workspace_id,
+        credits_available: status.credits_available,
+        config_path: path,
+      }
+      const mode = modeOf(g)
+      if (mode === "json") printJson(payload)
+      else printFields(payload)
     } catch (err) {
       handleError(err)
     }
@@ -128,10 +151,28 @@ program
 program
   .command("logout")
   .description("Remove the saved API key")
-  .action(() => {
+  .option("-y, --yes", "skip confirmation (default when stdin is not a TTY)", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims logout --yes
+  aims logout --json
+`,
+  )
+  .action(async (opts: { yes?: boolean }, command: Command) => {
+    const g = command.optsWithGlobals() as GlobalOpts
+    if (isInteractive() && !opts.yes) {
+      const answer = await promptTty("Remove the saved API key? [y/N] ")
+      if (!/^y(es)?$/i.test(answer)) {
+        die("Aborted.", 0)
+      }
+    }
     const existing = readConfig()
-    writeConfig({ baseUrl: existing.baseUrl })
-    process.stdout.write(`Logged out. Cleared API key in ${configPath()}\n`)
+    const path = writeConfig({ baseUrl: existing.baseUrl })
+    const payload = { logged_out: true, config_path: path }
+    if (modeOf(g) === "json") printJson(payload)
+    else printFields(payload)
   })
 
 // ---------------------------------------------------------------------------
@@ -141,36 +182,93 @@ program
   .command("whoami")
   .alias("status")
   .description("Show workspace, credit balance, and scopes")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims whoami
+  aims whoami --json
+`,
+  )
   .action(async (_opts, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
     const client = makeClient(g)
     try {
       const status = await client.account()
-      if (g.json) {
-        process.stdout.write(JSON.stringify(status, null, 2) + "\n")
+      const mode = modeOf(g)
+      if (mode === "json") {
+        printJson(status)
         return
       }
-      process.stdout.write(
-        `Workspace:  ${status.workspace_id}\n` +
-          `Credits:    ${status.credits_available}\n` +
-          `Scopes:     ${status.scopes.join(", ") || "(none)"}\n`,
-      )
+      printFields({
+        workspace_id: status.workspace_id,
+        credits_available: status.credits_available,
+        scopes: status.scopes.join(", ") || "(none)",
+      })
     } catch (err) {
       handleError(err)
     }
   })
 
 // ---------------------------------------------------------------------------
+// config
+// ---------------------------------------------------------------------------
+const configCmd = program.command("config").description("Inspect the local CLI config file")
+
+configCmd
+  .command("path")
+  .description("Print the config file path")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims config path
+`,
+  )
+  .action(() => {
+    process.stdout.write(`${configPath()}\n`)
+  })
+
+configCmd
+  .command("show")
+  .description("Show saved config (API key redacted)")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims config show
+  aims config show --json
+`,
+  )
+  .action((_opts, command: Command) => {
+    const g = command.optsWithGlobals() as GlobalOpts
+    const saved = readConfig()
+    const payload = {
+      config_path: configPath(),
+      api_key: saved.apiKey ? `${saved.apiKey.slice(0, 8)}…` : null,
+      base_url: saved.baseUrl || null,
+    }
+    if (modeOf(g) === "json") printJson(payload)
+    else printFields(payload)
+  })
+
+// ---------------------------------------------------------------------------
 // models
 // ---------------------------------------------------------------------------
-function printModels(label: string, models: ModelInfo[], unit: string): void {
-  process.stdout.write(`\n${label}\n`)
+function printModelsText(label: string, models: ModelInfo[], unit: string): void {
+  process.stdout.write(`${label}\n`)
   if (!models.length) {
     process.stdout.write("  (none)\n")
     return
   }
   for (const m of models) {
-    process.stdout.write(`  ${m.id}\n    ${m.name} — ${m.credit_cost} ${unit}\n`)
+    printFields({
+      id: m.id,
+      name: m.name,
+      type: m.model_type,
+      credit_cost: `${m.credit_cost} ${unit}`,
+    })
+    process.stdout.write("\n")
   }
 }
 
@@ -178,20 +276,39 @@ program
   .command("models")
   .description("List available image and video models")
   .option("--type <type>", "filter: image or video")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims models
+  aims models --type image --json
+  aims models --type video --print url
+`,
+  )
   .action(async (opts: { type?: string }, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    const type =
-      opts.type === "image" || opts.type === "video" ? opts.type : undefined
-    if (opts.type && !type) die("--type must be 'image' or 'video'.")
+    const type = opts.type === "image" || opts.type === "video" ? opts.type : undefined
+    if (opts.type && !type) {
+      usage("Invalid --type.\n  aims models --type image\n  aims models --type video")
+    }
     const client = makeClient(g)
     try {
       const result = await client.listModels(type)
-      if (g.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + "\n")
+      const mode = modeOf(g)
+      if (mode === "json") {
+        printJson(result)
         return
       }
-      if (type !== "video") printModels("Image models", result.image_models, "credits/image")
-      if (type !== "image") printModels("Video models", result.video_models, "credits/second")
+      const ids = [
+        ...(type !== "video" ? result.image_models : []),
+        ...(type !== "image" ? result.video_models : []),
+      ].map((m) => m.id)
+      if (mode === "url") {
+        for (const id of ids) process.stdout.write(`${id}\n`)
+        return
+      }
+      if (type !== "video") printModelsText("Image models", result.image_models, "credits/image")
+      if (type !== "image") printModelsText("Video models", result.video_models, "credits/second")
     } catch (err) {
       handleError(err)
     }
@@ -203,7 +320,7 @@ program
 program
   .command("image")
   .description("Generate image(s) from a text prompt")
-  .argument("<prompt...>", "image description")
+  .argument("[prompt...]", "image description (or pass --stdin / pipe)")
   .option("-m, --model <model>", "model id (e.g. fal-ai/nano-banana-2)")
   .option("-n, --n <count>", "number of images (1-8)", parseIntOption)
   .option("-a, --aspect-ratio <ratio>", "e.g. 16:9, 1:1, 9:16")
@@ -216,11 +333,29 @@ program
   .option("-i, --image-url <url>", "reference image URL for editing (repeatable)", collect, [])
   .option("--make-public", "make the result publicly shareable", false)
   .option("-o, --output <path>", "download result(s) to a file or directory")
+  .option("--stdin", "read prompt from stdin", false)
+  .option("--dry-run", "print the request and exit without spending credits", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims image "a red panda astronaut, studio lighting" --aspect-ratio 16:9 --json
+  aims image "logo of a mountain, flat vector" --model fal-ai/nano-banana-2 --aspect-ratio 1:1 --output ./out
+  echo "a red panda astronaut" | aims image --stdin --json
+  aims image "a red panda astronaut" --dry-run --json
+  aims image "a red panda astronaut" --print url
+`,
+  )
   .action(async (promptParts: string[], opts, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    const client = makeClient(g)
+    const prompt = await resolvePrompt(
+      promptParts,
+      opts,
+      usage,
+      'aims image "<prompt>" --aspect-ratio 16:9 --json',
+    )
     const params: ImageGenerateParams = {
-      prompt: promptParts.join(" "),
+      prompt,
       model: opts.model,
       n: opts.n,
       aspect_ratio: opts.aspectRatio,
@@ -233,35 +368,48 @@ program
       image_urls: opts.imageUrl?.length ? opts.imageUrl : undefined,
       make_public: opts.makePublic || undefined,
     }
-    try {
-      if (!g.json) process.stdout.write("Generating image(s)…\n")
-      const result = await client.generateImage(params)
-      if (g.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + "\n")
-      } else {
-        for (const [i, img] of result.images.entries()) {
-          if (img.status === "completed" && img.url) {
-            process.stdout.write(`${i + 1}. ${img.url}\n`)
-            if (img.share_url) process.stdout.write(`   share: ${img.share_url}\n`)
-          } else {
-            process.stdout.write(`${i + 1}. [${img.status}] ${img.error || "no url"}\n`)
-          }
-        }
-        process.stdout.write(
-          `Credits used: ${result.credits_used}, remaining: ${result.credits_remaining}\n`,
-        )
+    if (opts.dryRun) {
+      const payload = { dry_run: true, method: "POST", path: "/images/generate", body: params }
+      if (modeOf(g) === "json") printJson(payload)
+      else {
+        printFields({ dry_run: true, method: "POST", path: "/images/generate" })
+        printJson(params)
       }
+      return
+    }
+    const client = makeClient(g)
+    try {
+      progress("Generating image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
+      const result = await client.generateImage(params)
+      const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
+      const mode = modeOf(g)
+      let saved: string[] = []
       if (opts.output) {
         const ext = `.${(opts.outputFormat as string) || "png"}`
-        const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
-        let saved = 0
-        for (const [i, url] of urls.entries()) {
-          const dest = resolveOutputPath(opts.output, url, i + 1, ext, urls.length > 1)
-          await downloadTo(url, dest)
-          process.stdout.write(`Saved ${dest}\n`)
-          saved++
+        saved = await saveDownloads(urls, opts.output, ext)
+        if (!saved.length) process.stderr.write("No completed images to download.\n")
+      }
+      if (mode === "json") {
+        printJson({ ...result, saved })
+      } else if (mode === "url") {
+        for (const url of urls) process.stdout.write(`${url}\n`)
+      } else {
+        for (const [i, img] of result.images.entries()) {
+          printFields({
+            index: i + 1,
+            id: img.id,
+            url: img.url,
+            share_url: img.share_url,
+            status: img.status,
+            error: img.error,
+          })
         }
-        if (!saved) process.stderr.write("No completed images to download.\n")
+        printFields({
+          credits_used: result.credits_used,
+          credits_remaining: result.credits_remaining,
+          style_applied: result.style_applied,
+          saved: saved.join(", ") || undefined,
+        })
       }
     } catch (err) {
       handleError(err)
@@ -274,20 +422,40 @@ program
 program
   .command("edit")
   .description("Edit/transform existing image(s) with a text instruction")
-  .argument("<prompt...>", "edit instruction")
-  .requiredOption("-i, --image-url <url>", "source image URL (repeatable)", collect, [])
+  .argument("[prompt...]", "edit instruction (or pass --stdin / pipe)")
+  .option("-i, --image-url <url>", "source image URL (repeatable)", collect, [])
   .option("-m, --model <model>", "model id")
   .option("-a, --aspect-ratio <ratio>", "defaults to auto to preserve proportions")
   .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
   .option("-f, --output-format <fmt>", "png, jpeg, webp")
   .option("--make-public", "make the result publicly shareable", false)
   .option("-o, --output <path>", "download result(s) to a file or directory")
+  .option("--stdin", "read prompt from stdin", false)
+  .option("--dry-run", "print the request and exit without spending credits", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims edit "make it a night scene with neon" --image-url https://example.com/photo.jpg --json
+  aims edit "combine these into a collage" --image-url https://example.com/a.jpg --image-url https://example.com/b.jpg --output ./out
+  echo "make it night" | aims edit --stdin --image-url https://example.com/photo.jpg --json
+`,
+  )
   .action(async (promptParts: string[], opts, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    if (!opts.imageUrl?.length) die("At least one --image-url is required.")
-    const client = makeClient(g)
+    if (!opts.imageUrl?.length) {
+      usage(
+        "At least one --image-url is required.\n  aims edit \"make it a night scene\" --image-url https://example.com/photo.jpg --json",
+      )
+    }
+    const prompt = await resolvePrompt(
+      promptParts,
+      opts,
+      usage,
+      'aims edit "<instruction>" --image-url https://example.com/photo.jpg --json',
+    )
     const params: ImageGenerateParams = {
-      prompt: promptParts.join(" "),
+      prompt,
       image_urls: opts.imageUrl,
       model: opts.model,
       aspect_ratio: opts.aspectRatio,
@@ -295,31 +463,45 @@ program
       output_format: opts.outputFormat,
       make_public: opts.makePublic || undefined,
     }
-    try {
-      if (!g.json) process.stdout.write("Editing image(s)…\n")
-      const result = await client.generateImage(params)
-      if (g.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + "\n")
-      } else {
-        for (const [i, img] of result.images.entries()) {
-          process.stdout.write(
-            img.url
-              ? `${i + 1}. ${img.url}\n`
-              : `${i + 1}. [${img.status}] ${img.error || "no url"}\n`,
-          )
-        }
-        process.stdout.write(
-          `Credits used: ${result.credits_used}, remaining: ${result.credits_remaining}\n`,
-        )
+    if (opts.dryRun) {
+      const payload = { dry_run: true, method: "POST", path: "/images/generate", body: params }
+      if (modeOf(g) === "json") printJson(payload)
+      else {
+        printFields({ dry_run: true, method: "POST", path: "/images/generate" })
+        printJson(params)
       }
+      return
+    }
+    const client = makeClient(g)
+    try {
+      progress("Editing image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
+      const result = await client.generateImage(params)
+      const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
+      const mode = modeOf(g)
+      let saved: string[] = []
       if (opts.output) {
         const ext = `.${(opts.outputFormat as string) || "png"}`
-        const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
-        for (const [i, url] of urls.entries()) {
-          const dest = resolveOutputPath(opts.output, url, i + 1, ext, urls.length > 1)
-          await downloadTo(url, dest)
-          process.stdout.write(`Saved ${dest}\n`)
+        saved = await saveDownloads(urls, opts.output, ext)
+      }
+      if (mode === "json") printJson({ ...result, saved })
+      else if (mode === "url") {
+        for (const url of urls) process.stdout.write(`${url}\n`)
+      } else {
+        for (const [i, img] of result.images.entries()) {
+          printFields({
+            index: i + 1,
+            id: img.id,
+            url: img.url,
+            share_url: img.share_url,
+            status: img.status,
+            error: img.error,
+          })
         }
+        printFields({
+          credits_used: result.credits_used,
+          credits_remaining: result.credits_remaining,
+          saved: saved.join(", ") || undefined,
+        })
       }
     } catch (err) {
       handleError(err)
@@ -332,7 +514,7 @@ program
 program
   .command("video")
   .description("Generate a video from a text prompt")
-  .argument("<prompt...>", "video description")
+  .argument("[prompt...]", "video description (or pass --stdin / pipe)")
   .option("-m, --model <model>", "model id (e.g. fal-ai/veo3.1/fast)")
   .option("-d, --duration <seconds>", "requested duration in seconds", parseIntOption)
   .option("-a, --aspect-ratio <ratio>", "e.g. 16:9, 9:16")
@@ -342,11 +524,28 @@ program
   .option("--negative-prompt <text>", "negative prompt when supported")
   .option("--make-public", "make the result publicly shareable", false)
   .option("-o, --output <path>", "download the result to a file or directory")
+  .option("--stdin", "read prompt from stdin", false)
+  .option("--dry-run", "print the request and exit without spending credits", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims video "drone shot over snowy mountains at sunrise" --duration 6 --json
+  aims video "slow cinematic push-in" --model fal-ai/veo3.1/fast/image-to-video --image-url https://example.com/frame.png --duration 5
+  echo "waves at sunset" | aims video --stdin --duration 6 --print url
+  aims video "waves at sunset" --duration 6 --dry-run --json
+`,
+  )
   .action(async (promptParts: string[], opts, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    const client = makeClient(g)
+    const prompt = await resolvePrompt(
+      promptParts,
+      opts,
+      usage,
+      'aims video "<prompt>" --duration 6 --json',
+    )
     const params: VideoGenerateParams = {
-      prompt: promptParts.join(" "),
+      prompt,
       model: opts.model,
       duration: opts.duration,
       aspect_ratio: opts.aspectRatio,
@@ -356,27 +555,43 @@ program
       negative_prompt: opts.negativePrompt,
       make_public: opts.makePublic || undefined,
     }
+    if (opts.dryRun) {
+      const payload = { dry_run: true, method: "POST", path: "/videos/generate", body: params }
+      if (modeOf(g) === "json") printJson(payload)
+      else {
+        printFields({ dry_run: true, method: "POST", path: "/videos/generate" })
+        printJson(params)
+      }
+      return
+    }
+    const client = makeClient(g)
     try {
-      if (!g.json) process.stdout.write("Generating video… (this can take a few minutes)\n")
+      progress("Generating video… (this can take a few minutes)", Boolean(g.quiet) || modeOf(g) !== "text")
       const result = await client.generateVideo(params)
-      if (g.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + "\n")
+      const mode = modeOf(g)
+      let saved: string[] = []
+      if (opts.output && result.video.url) {
+        saved = await saveDownloads([result.video.url], opts.output, ".mp4")
+      }
+      if (mode === "json") printJson({ ...result, saved })
+      else if (mode === "url") {
+        if (result.video.url) process.stdout.write(`${result.video.url}\n`)
       } else {
         const v = result.video
-        if (v.url) {
-          process.stdout.write(`${v.url}\n`)
-          if (v.share_url) process.stdout.write(`share: ${v.share_url}\n`)
-        } else {
-          process.stdout.write(`[${v.status}] ${v.error || "no url"}\n`)
-        }
-        process.stdout.write(
-          `Credits used: ${result.credits_used}, remaining: ${result.credits_remaining}\n`,
-        )
-      }
-      if (opts.output && result.video.url) {
-        const dest = resolveOutputPath(opts.output, result.video.url, 1, ".mp4", false)
-        await downloadTo(result.video.url, dest)
-        process.stdout.write(`Saved ${dest}\n`)
+        printFields({
+          id: v.id,
+          url: v.url,
+          share_url: v.share_url,
+          status: v.status,
+          model: v.model,
+          duration: v.duration,
+          aspect_ratio: v.aspect_ratio,
+          audio: v.audio,
+          error: v.error,
+          credits_used: result.credits_used,
+          credits_remaining: result.credits_remaining,
+          saved: saved.join(", ") || undefined,
+        })
       }
     } catch (err) {
       handleError(err)

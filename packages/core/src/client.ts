@@ -23,6 +23,15 @@ export class AimsApiError extends Error {
 
 const DEFAULT_TIMEOUT_MS = 600_000
 
+function errorMessageFromBody(body: unknown, status: number): string {
+  if (body && typeof body === "object") {
+    const record = body as Record<string, unknown>
+    if (typeof record.error === "string" && record.error) return record.error
+    if (typeof record.message === "string" && record.message) return record.message
+  }
+  return `Request failed with status ${status}`
+}
+
 /**
  * Minimal, dependency-free client for the AIMS public API.
  * Works in Node 18+ (global fetch) and any environment with a fetch implementation.
@@ -90,7 +99,7 @@ export class AimsClient {
     }
 
     const text = await res.text()
-    let json: any
+    let json: unknown
     try {
       json = text ? JSON.parse(text) : {}
     } catch {
@@ -98,8 +107,7 @@ export class AimsClient {
     }
 
     if (!res.ok) {
-      const message =
-        json?.error || json?.message || `Request failed with status ${res.status}`
+      const message = errorMessageFromBody(json, res.status)
       throw new AimsApiError(message, res.status, json)
     }
     return json as T
