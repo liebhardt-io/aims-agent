@@ -24,6 +24,7 @@ test("image tools mark partial and total failures while retaining detailed resul
   let batch
   const baseUrl = await serve(t, (_request, response) => json(response, batch))
   const client = await connect(t, home, baseUrl)
+  await client.listTools()
   for (const name of ["generate_image", "edit_image"]) {
     for (const images of [[failedImage], [completedImage, failedImage], [completedImage]]) {
       batch = imageBatch(images)
@@ -34,6 +35,24 @@ test("image tools mark partial and total failures while retaining detailed resul
       assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent)
     }
   }
+})
+
+test("discovery output schemas preserve model settings after tool discovery", async (t) => {
+  const home = await temporaryHome(t)
+  const model = {
+    id: "fal-ai/nano-banana-pro", name: "Nano Banana Pro", model_type: "text2img", credit_cost: 30,
+    description: null, default_advanced_settings: { resolution: "1K" }, available_settings: { resolution: ["1K", "2K"] },
+  }
+  const baseUrl = await serve(t, (request, response) => {
+    if (request.url === "/models") json(response, { status: "ok", workspace_id: "workspace", image_models: [model], video_models: [] })
+    else json(response, { status: "ok", workspace_id: "workspace", credits_available: 100, scopes: ["image:generate"], available_models: [model] })
+  })
+  const client = await connect(t, home, baseUrl)
+  await client.listTools()
+  const models = await client.callTool({ name: "list_models", arguments: {} })
+  assert.deepEqual(models.structuredContent.image_models, [model])
+  const account = await client.callTool({ name: "get_account", arguments: {} })
+  assert.deepEqual(account.structuredContent.available_models, [model])
 })
 
 test("video tools expose and forward every required video source field", async (t) => {
