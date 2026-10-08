@@ -60,10 +60,8 @@ test("video tools expose and forward every required video source field", async (
   assert.deepEqual(received, args)
 })
 
-test("upload_image transfers a local file and returns a workspace URL", async (t) => {
+test("upload_image transfers supplied image contents and returns a workspace URL", async (t) => {
   const home = await temporaryHome(t)
-  const path = join(home, "source.png")
-  await writeFile(path, png)
   const url = "https://cdn.example.test/workspaces/test/source.png"
   let file
   const baseUrl = await serve(t, async (request, response) => {
@@ -73,9 +71,33 @@ test("upload_image transfers a local file and returns a workspace URL", async (t
     json(response, { success: true, id: "upload", url })
   })
   const client = await connect(t, home, baseUrl)
-  const result = await client.callTool({ name: "upload_image", arguments: { file_path: path } })
+  const result = await client.callTool({ name: "upload_image", arguments: { image_base64: png.toString("base64"), filename: "source.png" } })
   assert.equal(result.isError, undefined)
   assert.deepEqual(result.structuredContent, { success: true, id: "upload", url })
   assert.equal(file.name, "source.png")
   assert.deepEqual(Buffer.from(await file.arrayBuffer()), png)
+})
+
+test("upload_image accepts no file paths and rejects nonimages before HTTP", async (t) => {
+  const home = await temporaryHome(t)
+  const path = join(home, "private.png")
+  await writeFile(path, png)
+  let requests = 0
+  const baseUrl = await serve(t, (_request, response) => { requests++; json(response, {}) })
+  const client = await connect(t, home, baseUrl)
+  const tools = await client.listTools()
+  const inputs = tools.tools.find(tool => tool.name === "upload_image").inputSchema.properties
+  assert.equal(inputs.file_path, undefined)
+  assert.ok(inputs.image_base64)
+  for (const args of [
+    { file_path: path },
+    { image_base64: path },
+    { image_base64: Buffer.from("local credentials fixture").toString("base64") },
+    { image_base64: Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>").toString("base64") },
+    { image_base64: "not base64" },
+  ]) {
+    const result = await client.callTool({ name: "upload_image", arguments: args })
+    assert.equal(result.isError, true)
+  }
+  assert.equal(requests, 0)
 })

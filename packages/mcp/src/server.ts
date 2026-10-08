@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import { readImageFile, type ImageGenerateParams, type VideoGenerateParams } from "@ai-media-studio/core"
+import { imageBlobFromBase64, MAX_IMAGE_BASE64_LENGTH, type ImageGenerateParams, type VideoGenerateParams } from "@ai-media-studio/core"
 import {
   PACKAGE_VERSION,
   SERVER_INSTRUCTIONS,
@@ -26,8 +26,9 @@ export function createAimsServer(): McpServer {
     {
       title: "Upload source image",
       description:
-        "Upload a local source image to the API key's workspace before editing or image-to-video. " +
-        "Requires media:write. Accepts raster images up to 20 MiB. Returns the workspace-hosted URL.",
+        "Upload supplied base64 image contents to the API key's workspace before editing or image-to-video. " +
+        "Requires media:write. Accepts raster images up to 20 MiB and never reads local paths. " +
+        "For local files use aims upload, then pass its returned URL. Returns the workspace-hosted URL.",
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -35,15 +36,16 @@ export function createAimsServer(): McpServer {
         openWorldHint: true,
       },
       inputSchema: {
-        file_path: z.string().min(1).describe("Absolute path to a local image file readable by this MCP server."),
+        image_base64: z.string().min(1).max(MAX_IMAGE_BASE64_LENGTH).describe("Raw base64 raster-image contents without a data URL prefix. Filesystem paths are not accepted."),
+        filename: z.string().min(1).max(255).optional().describe("Optional upload filename, used only as a label."),
       },
       outputSchema: z.object({ success: z.boolean(), id: z.string(), url: z.string() }),
     },
-    async ({ file_path }) => {
+    async ({ image_base64, filename }) => {
       try {
         const client = getClient()
-        const { file, filename } = await readImageFile(file_path)
-        return ok({ ...await client.uploadImage(file, filename) })
+        const file = imageBlobFromBase64(image_base64)
+        return ok({ ...await client.uploadImage(file, filename ?? "image") })
       } catch (error) {
         return fail(error)
       }

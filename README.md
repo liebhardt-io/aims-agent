@@ -99,7 +99,7 @@ aims-agent/
 
 Discover live models and pricing any time — see [`reference/models.md`](reference/models.md). Prompting tips in [`reference/prompting.md`](reference/prompting.md).
 
-Upload local source images with `aims upload <file>` or MCP `upload_image` before editing or image-to-video. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL as the reference; arbitrary external image URLs are not accepted.
+Upload local source images with `aims upload <file>` before editing or image-to-video. MCP `upload_image` accepts supplied `image_base64` contents and reads no local files. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL as the reference; arbitrary external image URLs are not accepted.
 
 ## Configuration
 

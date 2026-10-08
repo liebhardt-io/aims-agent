@@ -50,7 +50,7 @@ url=$(aims image "a red panda astronaut" --print url) &&
 
 Image failures, including partial batches, exit 1 after printing results. Keep completed images and retry only missing work. Download errors retain the generated URLs; download those URLs again instead of regenerating.
 
-Upload local source images with `aims upload ./photo.png --print url` or MCP `upload_image` using an absolute `file_path`. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL for image references; arbitrary external image URLs are not accepted.
+Upload local source images with `aims upload ./photo.png --print url`. MCP `upload_image` takes supplied raw `image_base64` contents and an optional `filename`; it reads no local files. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL for image references; arbitrary external image URLs are not accepted.
 
 ## MCP
 

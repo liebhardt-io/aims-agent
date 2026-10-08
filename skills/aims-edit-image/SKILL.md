@@ -20,7 +20,7 @@ Transform existing images with a text instruction. This uses the same image endp
 
 ## Steps
 
-1. Use source image URLs from the API key's workspace. For a local file, call `upload_image` with its absolute `file_path` or `aims upload <file> --print url`, then use the returned URL. Arbitrary external image URLs are not accepted.
+1. Use source image URLs from the API key's workspace. For a local file, run `aims upload <file> --print url` and use the returned URL. MCP `upload_image` accepts supplied raw `image_base64` contents, not file paths. Arbitrary external image URLs are not accepted.
 2. Write a clear edit instruction.
 3. Call the API with `image_urls`.
 4. Return completed image URLs and report credits used/remaining. Partial and total failures set MCP `isError` or CLI exit 1 while retaining all results. Retry only failed work.

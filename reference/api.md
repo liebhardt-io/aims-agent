@@ -19,7 +19,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/uploads \
 { "success": true, "id": "uuid", "url": "https://cdn.ai-media-studio.com/workspaces/WORKSPACE_ID/uploads/source.png" }
 ```
 
-Use the returned URL for image editing or video image references. Arbitrary externally hosted image URLs are not accepted. CLI users can run `aims upload ./photo.png --print url`; MCP users can call `upload_image` with an absolute local `file_path`.
+Use the returned URL for image editing or video image references. Arbitrary externally hosted image URLs are not accepted. CLI users can run `aims upload ./photo.png --print url`; MCP users can call `upload_image` with supplied raw `image_base64` contents and an optional `filename`. MCP uploads read no local files.
 
 ---
 
