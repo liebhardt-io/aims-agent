@@ -1,6 +1,6 @@
 {
   "name": "@ai-media-studio/mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for AI Media Studio (AIMS) — generate images and videos from any MCP-compatible agent (Claude Code, Cursor, Claude Desktop).",
   "license": "Apache-2.0",
   "repository": {

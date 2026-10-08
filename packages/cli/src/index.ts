@@ -24,7 +24,7 @@ import { die, handleError, requireApiKey, usage, USAGE_EXIT } from "./errors.js"
 import { isInteractive, resolvePrompt } from "./prompt.js"
 import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
 
-const VERSION = "0.2.0"
+const VERSION = "0.3.0"
 
 interface GlobalOpts {
   key?: string

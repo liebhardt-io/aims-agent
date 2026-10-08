@@ -11,7 +11,7 @@ import {
   type VideoGenerateResult,
 } from "@ai-media-studio/core"
 
-export const PACKAGE_VERSION = "0.2.0"
+export const PACKAGE_VERSION = "0.3.0"
 
 export function getClient(): AimsClient {
   const apiKey = resolveApiKey()
@@ -89,7 +89,8 @@ const generatedImageSchema = z.object({
   share_url: z.string().optional(),
   status: z.string(),
   error: z.string().optional(),
-})
+  credits_refunded: z.number().optional(),
+}).passthrough()
 
 export const imageOutputSchema = z
   .object({
@@ -128,7 +129,9 @@ const modelInfoSchema = z.object({
   model_type: z.string(),
   credit_cost: z.number(),
   description: z.string().nullable().optional(),
-})
+  default_advanced_settings: z.record(z.unknown()).nullable().optional(),
+  available_settings: z.record(z.unknown()).nullable().optional(),
+}).passthrough()
 
 export const modelsOutputSchema = z
   .object({
