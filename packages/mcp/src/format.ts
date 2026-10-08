@@ -11,7 +11,7 @@ import {
   type VideoGenerateResult,
 } from "@ai-media-studio/core"
 
-export const PACKAGE_VERSION = "0.2.0"
+export const PACKAGE_VERSION = "0.3.0"
 
 export function getClient(): AimsClient {
   const apiKey = resolveApiKey()
