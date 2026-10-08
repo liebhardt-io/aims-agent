@@ -2,6 +2,7 @@ import { z } from "zod"
 import {
   AimsApiError,
   AimsClient,
+  imageGenerationOutcome,
   apiErrorHint,
   missingApiKeyMessage,
   resolveApiKey,
@@ -71,8 +72,9 @@ export const SERVER_INSTRUCTIONS = `AI Media Studio (AIMS) generates images and 
 Workflow:
 1. Call get_account if you need the credit balance or scopes.
 2. Call list_models to pick a live model id when the user did not specify one.
-3. Call generate_image, edit_image, or generate_video. Each call spends workspace credits.
-4. Return the hosted url(s), credits_used, and credits_remaining to the user.
+3. For supplied image contents, call upload_image with image_base64 (requires media:write), then use the returned URL. For local files use aims upload and pass its returned workspace URL. MCP tools do not read local files.
+4. Call generate_image, edit_image, or generate_video. Each call spends workspace credits. Image references must use workspace-hosted URLs; arbitrary external image URLs are not accepted.
+5. Return the hosted url(s), credits_used, and credits_remaining to the user. On partial failure, preserve completed results and do not blindly retry the whole batch.
 
 Defaults:
 - Image: fal-ai/nano-banana-2 (cheap/fast). Use openai/gpt-image-2 for crisp text.
@@ -148,7 +150,8 @@ export const accountOutputSchema = z
   .passthrough()
 
 export function imageResult(result: ImageGenerateResult): ToolResult {
-  return ok({ ...result })
+  const outcome = imageGenerationOutcome(result)
+  return { ...ok(outcome.result), ...(outcome.isError ? { isError: true } : {}) }
 }
 
 export function videoResult(result: VideoGenerateResult): ToolResult {
@@ -156,6 +159,10 @@ export function videoResult(result: VideoGenerateResult): ToolResult {
 }
 
 export const TOOL_CATALOG = [
+  {
+    name: "upload_image",
+    description: "Upload supplied base64 raster-image contents, up to 20 MiB, to the workspace. Requires media:write. Reads no local files. Returns a workspace-hosted URL for editing or image-to-video.",
+  },
   {
     name: "generate_image",
     description:

@@ -39,13 +39,20 @@ All tools return JSON (`url`, `id`, `credits_used`, `credits_remaining`). Read-o
 
 | Tool | Description |
 | --- | --- |
+| `upload_image` | Upload supplied `image_base64` contents, up to 20 MiB. Requires `media:write`. Reads no local files. |
 | `generate_image` | Text-to-image (and image-to-image via `image_urls`). |
 | `edit_image` | Image-to-image editing from source URL(s). |
-| `generate_video` | Text-to-video and image-to-video. |
+| `generate_video` | Text, image, reference, first/last-frame, and extended video generation. |
 | `list_models` | Discover available image/video models and costs (read-only). |
 | `get_account` | Workspace id, credit balance, and scopes (read-only). |
 
 Suggested order: `get_account` → `list_models` → generate. Defaults: `fal-ai/nano-banana-2` (images), `fal-ai/veo3.1/fast` (video). Video credits are per second.
+
+For supplied image contents, call `upload_image` with raw `image_base64` and an optional `filename`, then pass the returned workspace URL to `edit_image` or `generate_video`. PNG, JPEG, WebP, GIF, AVIF, HEIC, and BMP are supported. Raster signatures are checked before any HTTP upload. For local files, run `aims upload ./photo.png --print url` and use that URL with MCP. Filesystem paths are not accepted by `upload_image`.
+
+For first/last-frame models, provide `first_frame_url` and `last_frame_url`. For extension models, provide `extend_video_url` from a video generated in the same workspace. Reference models accept `image_urls`.
+
+Partial and total image failures return `isError: true` with the complete JSON result, including any completed images. Preserve those completed results and retry only the missing work. The server never retries paid generations automatically.
 
 ## Environment
 

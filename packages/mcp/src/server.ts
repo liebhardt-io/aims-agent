@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import type { ImageGenerateParams, VideoGenerateParams } from "@ai-media-studio/core"
+import { imageBlobFromBase64, MAX_IMAGE_BASE64_LENGTH, type ImageGenerateParams, type VideoGenerateParams } from "@ai-media-studio/core"
 import {
   PACKAGE_VERSION,
   SERVER_INSTRUCTIONS,
@@ -19,6 +19,37 @@ export function createAimsServer(): McpServer {
   const server = new McpServer(
     { name: "aims", version: PACKAGE_VERSION },
     { instructions: SERVER_INSTRUCTIONS },
+  )
+
+  server.registerTool(
+    "upload_image",
+    {
+      title: "Upload source image",
+      description:
+        "Upload supplied base64 image contents to the API key's workspace before editing or image-to-video. " +
+        "Requires media:write. Accepts raster images up to 20 MiB and never reads local paths. " +
+        "For local files use aims upload, then pass its returned URL. Returns the workspace-hosted URL.",
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        image_base64: z.string().min(1).max(MAX_IMAGE_BASE64_LENGTH).describe("Raw base64 raster-image contents without a data URL prefix. Filesystem paths are not accepted."),
+        filename: z.string().min(1).max(255).optional().describe("Optional upload filename, used only as a label."),
+      },
+      outputSchema: z.object({ success: z.boolean(), id: z.string(), url: z.string() }),
+    },
+    async ({ image_base64, filename }) => {
+      try {
+        const client = getClient()
+        const file = imageBlobFromBase64(image_base64)
+        return ok({ ...await client.uploadImage(file, filename ?? "image") })
+      } catch (error) {
+        return fail(error)
+      }
+    },
   )
 
   server.registerTool(
@@ -57,7 +88,7 @@ export function createAimsServer(): McpServer {
           .array(z.string().url())
           .max(10)
           .optional()
-          .describe("Reference image URLs (http/https) for image-to-image editing. Max 10."),
+          .describe("Workspace-hosted reference image URLs for editing. Max 10. Upload local files with upload_image first."),
         seed: z.union([z.number(), z.string()]).optional().describe("Seed for deterministic output."),
         limit_generations: z
           .boolean()
@@ -86,7 +117,7 @@ export function createAimsServer(): McpServer {
       title: "Edit image (image-to-image)",
       description:
         "Transform or edit existing image(s) with a text instruction using AI Media Studio (AIMS). " +
-        "Provide one or more source image URLs (http/https). Returns JSON with the edited image URL.",
+        "Provide workspace-hosted source image URLs; upload local files with upload_image first. Returns JSON with the edited image URL.",
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -99,7 +130,7 @@ export function createAimsServer(): McpServer {
           .array(z.string().url())
           .min(1)
           .max(10)
-          .describe("Source image URLs (http/https) to edit. 1-10."),
+          .describe("Workspace-hosted source image URLs to edit. 1-10."),
         model: z.string().optional().describe("Model id. Defaults to an edit-capable model."),
         aspect_ratio: z.string().optional().describe("Defaults to 'auto' to preserve proportions."),
         resolution: z.string().optional().describe("0.5K, 1K, 2K, or 4K (model dependent)."),
@@ -124,7 +155,8 @@ export function createAimsServer(): McpServer {
       title: "Generate video",
       description:
         "Generate a video from a text prompt using AI Media Studio (AIMS). " +
-        "Supports image-to-video (image_url) and reference-to-video (image_urls). " +
+        "Supports image-to-video (image_url), reference-to-video (image_urls), " +
+        "first/last frames (first_frame_url and last_frame_url), and extension (extend_video_url). " +
         "Returns JSON with the hosted MP4 URL. Credits are per second; keep clips short.",
       annotations: {
         readOnlyHint: false,
@@ -146,11 +178,14 @@ export function createAimsServer(): McpServer {
           .describe("Requested duration in seconds; snaps to the model's nearest supported value."),
         aspect_ratio: z.string().optional().describe("e.g. 16:9 or 9:16."),
         audio: z.boolean().optional().describe("Enable audio when the model supports it."),
-        image_url: z.string().url().optional().describe("Source image for image-to-video models."),
+        image_url: z.string().url().optional().describe("Workspace-hosted source image for image-to-video. Upload local files with upload_image first."),
         image_urls: z
           .array(z.string().url())
           .optional()
           .describe("Reference images for reference-to-video models."),
+        first_frame_url: z.string().url().optional().describe("Start frame for first-last-frame-to-video models."),
+        last_frame_url: z.string().url().optional().describe("End frame for first-last-frame-to-video models or optional end-frame guidance."),
+        extend_video_url: z.string().url().optional().describe("Source video URL for extend-video models."),
         resolution: z.string().optional().describe("Resolution when supported (e.g. 720p, 1080p)."),
         negative_prompt: z.string().optional().describe("Negative prompt when supported."),
         make_public: z.boolean().optional().describe("Make the result publicly shareable."),

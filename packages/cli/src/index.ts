@@ -11,14 +11,16 @@ import { stdin as input, stdout as output } from "node:process"
 import {
   AimsClient,
   DEFAULT_BASE_URL,
+  imageGenerationOutcome,
   LOGIN_EXAMPLE,
+  readImageFile,
   type ImageGenerateParams,
   type ModelInfo,
   type VideoGenerateParams,
 } from "@ai-media-studio/core"
 import { configPath, readConfig, resolveApiKey, resolveBaseUrl, writeConfig } from "./config.js"
 import { collect, parseIntOption, resolveOutputPath, downloadTo } from "./output.js"
-import { die, handleError, requireApiKey, usage } from "./errors.js"
+import { die, handleError, requireApiKey, usage, USAGE_EXIT } from "./errors.js"
 import { isInteractive, resolvePrompt } from "./prompt.js"
 import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
 
@@ -54,18 +56,37 @@ async function promptTty(question: string): Promise<string> {
   }
 }
 
+interface Downloads {
+  saved: string[]
+  download_errors: Array<{ url: string; error: string }>
+}
+
 async function saveDownloads(
   urls: string[],
   dest: string,
   fallbackExt: string,
-): Promise<string[]> {
-  const saved: string[] = []
+): Promise<Downloads> {
+  const downloads: Downloads = { saved: [], download_errors: [] }
   for (const [i, url] of urls.entries()) {
-    const path = resolveOutputPath(dest, url, i + 1, fallbackExt, urls.length > 1)
-    await downloadTo(url, path)
-    saved.push(path)
+    try {
+      const path = await resolveOutputPath(dest, url, i + 1, fallbackExt, urls.length > 1)
+      await downloadTo(url, path)
+      downloads.saved.push(path)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      downloads.download_errors.push({ url, error: message })
+      process.stderr.write(`Download failed for ${url}: ${message}\nRetry the download from this URL without regenerating.\n`)
+      process.exitCode = 1
+    }
   }
-  return saved
+  return downloads
+}
+
+function reportImageFailure(failed: number): void {
+  process.stderr.write(failed > 0
+    ? `${failed} image generation(s) failed. Completed results are included in the output.\n`
+    : "Image generation returned no completed results.\n")
+  process.exitCode = 1
 }
 
 const program = new Command()
@@ -80,6 +101,7 @@ program
   .option("--print <format>", "text | json | url  (url prints result URL(s) only)")
   .option("--quiet", "suppress progress on stderr", false)
   .showHelpAfterError(false)
+  .exitOverride((error) => process.exit(error.exitCode === 0 ? 0 : USAGE_EXIT))
   .addHelpText(
     "after",
     `
@@ -315,6 +337,37 @@ Examples:
   })
 
 // ---------------------------------------------------------------------------
+// upload
+// ---------------------------------------------------------------------------
+program
+  .command("upload")
+  .description("Upload a local source image to the API key's workspace (requires media:write)")
+  .argument("<file>", "local image file, up to 20 MiB")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims upload ./photo.png --json
+  aims upload ./photo.png --print url
+  aims edit "make it a night scene" --image-url "$(aims upload ./photo.png --print url)" --json
+`,
+  )
+  .action(async (path: string, _opts, command: Command) => {
+    const g = command.optsWithGlobals() as GlobalOpts
+    const mode = modeOf(g)
+    const client = makeClient(g)
+    try {
+      const { file, filename } = await readImageFile(path)
+      const result = await client.uploadImage(file, filename)
+      if (mode === "json") printJson(result)
+      else if (mode === "url") process.stdout.write(`${result.url}\n`)
+      else printFields({ ...result })
+    } catch (error) {
+      handleError(error)
+    }
+  })
+
+// ---------------------------------------------------------------------------
 // image
 // ---------------------------------------------------------------------------
 program
@@ -330,7 +383,7 @@ program
   .option("-q, --quality <quality>", "low, medium, high, auto")
   .option("--style <slug>", "style preset slug")
   .option("--seed <seed>", "seed for deterministic output")
-  .option("-i, --image-url <url>", "reference image URL for editing (repeatable)", collect, [])
+  .option("-i, --image-url <url>", "workspace image URL for editing (repeatable; use aims upload for local files)", collect, [])
   .option("--make-public", "make the result publicly shareable", false)
   .option("-o, --output <path>", "download result(s) to a file or directory")
   .option("--stdin", "read prompt from stdin", false)
@@ -380,17 +433,17 @@ Examples:
     const client = makeClient(g)
     try {
       progress("Generating image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
-      const result = await client.generateImage(params)
-      const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
+      const outcome = imageGenerationOutcome(await client.generateImage(params))
+      const result = outcome.result
+      const urls = result.images.flatMap((im) => im.status === "completed" && im.url ? [im.url] : [])
       const mode = modeOf(g)
-      let saved: string[] = []
+      let downloads: Downloads = { saved: [], download_errors: [] }
       if (opts.output) {
         const ext = `.${(opts.outputFormat as string) || "png"}`
-        saved = await saveDownloads(urls, opts.output, ext)
-        if (!saved.length) process.stderr.write("No completed images to download.\n")
+        downloads = await saveDownloads(urls, opts.output, ext)
       }
       if (mode === "json") {
-        printJson({ ...result, saved })
+        printJson({ ...result, ...downloads })
       } else if (mode === "url") {
         for (const url of urls) process.stdout.write(`${url}\n`)
       } else {
@@ -408,9 +461,10 @@ Examples:
           credits_used: result.credits_used,
           credits_remaining: result.credits_remaining,
           style_applied: result.style_applied,
-          saved: saved.join(", ") || undefined,
+          saved: downloads.saved.join(", ") || undefined,
         })
       }
+      if (outcome.isError) reportImageFailure(outcome.failed)
     } catch (err) {
       handleError(err)
     }
@@ -423,7 +477,7 @@ program
   .command("edit")
   .description("Edit/transform existing image(s) with a text instruction")
   .argument("[prompt...]", "edit instruction (or pass --stdin / pipe)")
-  .option("-i, --image-url <url>", "source image URL (repeatable)", collect, [])
+  .option("-i, --image-url <url>", "workspace source image URL (repeatable; use aims upload for local files)", collect, [])
   .option("-m, --model <model>", "model id")
   .option("-a, --aspect-ratio <ratio>", "defaults to auto to preserve proportions")
   .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
@@ -436,23 +490,23 @@ program
     "after",
     `
 Examples:
-  aims edit "make it a night scene with neon" --image-url https://example.com/photo.jpg --json
-  aims edit "combine these into a collage" --image-url https://example.com/a.jpg --image-url https://example.com/b.jpg --output ./out
-  echo "make it night" | aims edit --stdin --image-url https://example.com/photo.jpg --json
+  source_url=$(aims upload ./photo.jpg --print url) && aims edit "make it a night scene with neon" --image-url "$source_url" --json
+  aims edit "combine these into a collage" --image-url "$A_URL" --image-url "$B_URL" --output ./out
+  echo "make it night" | aims edit --stdin --image-url "$SOURCE_URL" --json
 `,
   )
   .action(async (promptParts: string[], opts, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
     if (!opts.imageUrl?.length) {
       usage(
-        "At least one --image-url is required.\n  aims edit \"make it a night scene\" --image-url https://example.com/photo.jpg --json",
+        "At least one --image-url is required.\n  aims upload ./photo.jpg --print url\n  aims edit \"make it a night scene\" --image-url \"$SOURCE_URL\" --json",
       )
     }
     const prompt = await resolvePrompt(
       promptParts,
       opts,
       usage,
-      'aims edit "<instruction>" --image-url https://example.com/photo.jpg --json',
+      'aims edit "<instruction>" --image-url "$SOURCE_URL" --json',
     )
     const params: ImageGenerateParams = {
       prompt,
@@ -475,15 +529,16 @@ Examples:
     const client = makeClient(g)
     try {
       progress("Editing image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
-      const result = await client.generateImage(params)
-      const urls = result.images.filter((im) => im.url).map((im) => im.url as string)
+      const outcome = imageGenerationOutcome(await client.generateImage(params))
+      const result = outcome.result
+      const urls = result.images.flatMap((im) => im.status === "completed" && im.url ? [im.url] : [])
       const mode = modeOf(g)
-      let saved: string[] = []
+      let downloads: Downloads = { saved: [], download_errors: [] }
       if (opts.output) {
         const ext = `.${(opts.outputFormat as string) || "png"}`
-        saved = await saveDownloads(urls, opts.output, ext)
+        downloads = await saveDownloads(urls, opts.output, ext)
       }
-      if (mode === "json") printJson({ ...result, saved })
+      if (mode === "json") printJson({ ...result, ...downloads })
       else if (mode === "url") {
         for (const url of urls) process.stdout.write(`${url}\n`)
       } else {
@@ -500,9 +555,10 @@ Examples:
         printFields({
           credits_used: result.credits_used,
           credits_remaining: result.credits_remaining,
-          saved: saved.join(", ") || undefined,
+          saved: downloads.saved.join(", ") || undefined,
         })
       }
+      if (outcome.isError) reportImageFailure(outcome.failed)
     } catch (err) {
       handleError(err)
     }
@@ -520,6 +576,10 @@ program
   .option("-a, --aspect-ratio <ratio>", "e.g. 16:9, 9:16")
   .option("--audio", "enable audio when supported", false)
   .option("-i, --image-url <url>", "source image for image-to-video")
+  .option("--image-urls <url>", "reference image URL for reference-to-video (repeatable)", collect, [])
+  .option("--first-frame-url <url>", "start frame for first-last-frame-to-video")
+  .option("--last-frame-url <url>", "end frame for first-last-frame-to-video or optional end-frame guidance")
+  .option("--extend-video-url <url>", "source video URL for extend-video")
   .option("-r, --resolution <res>", "e.g. 720p, 1080p")
   .option("--negative-prompt <text>", "negative prompt when supported")
   .option("--make-public", "make the result publicly shareable", false)
@@ -531,7 +591,8 @@ program
     `
 Examples:
   aims video "drone shot over snowy mountains at sunrise" --duration 6 --json
-  aims video "slow cinematic push-in" --model fal-ai/veo3.1/fast/image-to-video --image-url https://example.com/frame.png --duration 5
+  aims video "slow cinematic push-in" --model fal-ai/veo3.1/fast/image-to-video --image-url "$SOURCE_URL" --duration 5
+  aims video "transition between frames" --model fal-ai/veo3.1/fast/first-last-frame-to-video --first-frame-url "$START_URL" --last-frame-url "$END_URL" --json
   echo "waves at sunset" | aims video --stdin --duration 6 --print url
   aims video "waves at sunset" --duration 6 --dry-run --json
 `,
@@ -551,6 +612,10 @@ Examples:
       aspect_ratio: opts.aspectRatio,
       audio: opts.audio || undefined,
       image_url: opts.imageUrl,
+      image_urls: opts.imageUrls?.length ? opts.imageUrls : undefined,
+      first_frame_url: opts.firstFrameUrl,
+      last_frame_url: opts.lastFrameUrl,
+      extend_video_url: opts.extendVideoUrl,
       resolution: opts.resolution,
       negative_prompt: opts.negativePrompt,
       make_public: opts.makePublic || undefined,
@@ -569,11 +634,11 @@ Examples:
       progress("Generating video… (this can take a few minutes)", Boolean(g.quiet) || modeOf(g) !== "text")
       const result = await client.generateVideo(params)
       const mode = modeOf(g)
-      let saved: string[] = []
+      let downloads: Downloads = { saved: [], download_errors: [] }
       if (opts.output && result.video.url) {
-        saved = await saveDownloads([result.video.url], opts.output, ".mp4")
+        downloads = await saveDownloads([result.video.url], opts.output, ".mp4")
       }
-      if (mode === "json") printJson({ ...result, saved })
+      if (mode === "json") printJson({ ...result, ...downloads })
       else if (mode === "url") {
         if (result.video.url) process.stdout.write(`${result.video.url}\n`)
       } else {
@@ -590,7 +655,7 @@ Examples:
           error: v.error,
           credits_used: result.credits_used,
           credits_remaining: result.credits_remaining,
-          saved: saved.join(", ") || undefined,
+          saved: downloads.saved.join(", ") || undefined,
         })
       }
     } catch (err) {
