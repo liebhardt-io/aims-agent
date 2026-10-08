@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises"
-import { dirname, extname, join } from "node:path"
+import { mkdir, stat, writeFile } from "node:fs/promises"
+import { dirname, extname, join, sep } from "node:path"
+import { InvalidArgumentError } from "commander"
 
 /** Collect repeatable CLI options into an array. */
 export function collect(value: string, previous: string[]): string[] {
@@ -8,9 +9,9 @@ export function collect(value: string, previous: string[]): string[] {
 
 /** Parse an integer option, throwing a friendly error on bad input. */
 export function parseIntOption(value: string): number {
-  const n = Number.parseInt(value, 10)
-  if (Number.isNaN(n)) {
-    throw new Error(`Expected an integer but got "${value}"`)
+  const n = Number(value)
+  if (!/^-?\d+$/.test(value) || !Number.isSafeInteger(n)) {
+    throw new InvalidArgumentError(`Expected an integer but got "${value}"`)
   }
   return n
 }
@@ -42,14 +43,23 @@ export async function downloadTo(url: string, filePath: string): Promise<void> {
  * Resolve where to write a downloaded asset given the --output value.
  * If output looks like a directory (no extension), the derived filename is appended.
  */
-export function resolveOutputPath(
+export async function resolveOutputPath(
   output: string,
   url: string,
   index: number,
   fallbackExt: string,
   multiple: boolean,
-): string {
-  const looksLikeDir = !extname(output) || multiple
+): Promise<string> {
+  const existing = await stat(output).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return undefined
+    throw error
+  })
+  const looksLikeDir = existing
+    ? existing.isDirectory()
+    : !extname(output) || output.endsWith(sep) || output.endsWith("/") || multiple
+  if (multiple && existing && !existing.isDirectory()) {
+    throw new Error(`Multiple results require an output directory: ${output}`)
+  }
   if (looksLikeDir) {
     return join(output, deriveFilename(url, index, fallbackExt))
   }

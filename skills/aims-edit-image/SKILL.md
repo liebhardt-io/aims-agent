@@ -7,23 +7,23 @@ description: Edit, transform, restyle, or combine existing images with a text in
 
 Transform existing images with a text instruction. This uses the same image endpoint with `image_urls` supplied. **Prefer the first available method:**
 
-1. **MCP tool** `edit_image` — pass `prompt` and `image_urls` (1–10 http/https URLs). Returns JSON.
+1. **MCP tool** `edit_image` with `prompt` and `image_urls`, containing 1 to 10 workspace-hosted URLs. Returns JSON.
 2. **CLI** `aims edit "<instruction>" --image-url <url> --json`.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/images/generate` with an `image_urls` array.
 
 ## Inputs to gather
 
 - **prompt** (required): the edit instruction (what to change/add/remove/restyle).
-- **image_urls** (required): 1–10 publicly reachable http/https image URLs. Local files must be uploaded to a public URL first.
+- **image_urls** (required): 1 to 10 workspace-hosted image URLs. Upload local files with MCP `upload_image`, CLI `aims upload <file>`, or HTTP `POST /uploads` first. Uploads require `media:write`; see [the upload contract](../../reference/api.md#post-uploads).
 - **model** (optional): defaults to an edit-capable model. Examples: `fal-ai/nano-banana-2`, `fal-ai/nano-banana-pro`, `fal-ai/flux-pro/kontext`, `openai/gpt-image-2`.
 - **aspect_ratio** (optional): defaults to `auto` to preserve the original proportions.
 
 ## Steps
 
-1. Confirm you have valid http/https image URL(s). If the user has a local file, ask them to host it (or use a previously generated AIMS URL).
+1. Use source image URLs from the API key's workspace. For a local file, call `upload_image` with its absolute `file_path` or `aims upload <file> --print url`, then use the returned URL. Arbitrary external image URLs are not accepted.
 2. Write a clear edit instruction.
 3. Call the API with `image_urls`.
-4. Return the edited image URL and report credits used/remaining.
+4. Return completed image URLs and report credits used/remaining. Partial and total failures set MCP `isError` or CLI exit 1 while retaining all results. Retry only failed work.
 
 ## HTTP example
 
@@ -34,7 +34,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/images/generate \
   -d '{
     "prompt": "turn this into a moody cinematic night scene with neon reflections",
     "model": "fal-ai/nano-banana-2",
-    "image_urls": ["https://example.com/source.jpg"],
+    "image_urls": ["WORKSPACE_URL_FROM_UPLOAD"],
     "aspect_ratio": "auto"
   }'
 ```
@@ -42,14 +42,16 @@ curl -X POST https://app.ai-media-studio.com/api/v1/images/generate \
 ## CLI example
 
 ```bash
-aims edit "combine these into a single product collage on a white background" \
-  --image-url https://example.com/a.jpg \
-  --image-url https://example.com/b.jpg \
-  --json
+a_url=$(aims upload ./a.jpg --print url) &&
+  b_url=$(aims upload ./b.jpg --print url) &&
+  aims edit "combine these into a single product collage on a white background" \
+    --image-url "$a_url" \
+    --image-url "$b_url" \
+    --json
 ```
 
 ## Notes
 
 - Up to 10 source images may be combined.
-- `image_urls` must be valid http/https URLs.
+- `image_urls` must belong to the API key's workspace.
 - Each edit spends credits; failures are refunded.

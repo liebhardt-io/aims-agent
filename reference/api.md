@@ -3,7 +3,23 @@
 Base URL: `https://app.ai-media-studio.com/api/v1`
 Auth: `Authorization: Bearer $AIMS_API_KEY` (or `X-API-Key: $AIMS_API_KEY`)
 
-All request/response bodies are JSON.
+Request and response bodies are JSON except image uploads, which use multipart form data.
+
+## POST /uploads
+
+Upload a source image into the API key's workspace. Requires `media:write`. Send one multipart `file` containing PNG, JPEG, WebP, GIF, AVIF, HEIC, or BMP data, up to 20 MiB. The server verifies the file bytes and derives workspace ownership from the API key.
+
+```bash
+curl -X POST https://app.ai-media-studio.com/api/v1/uploads \
+  -H "Authorization: Bearer $AIMS_API_KEY" \
+  -F "file=@./photo.png"
+```
+
+```json
+{ "success": true, "id": "uuid", "url": "https://cdn.ai-media-studio.com/workspaces/WORKSPACE_ID/uploads/source.png" }
+```
+
+Use the returned URL for image editing or video image references. Arbitrary externally hosted image URLs are not accepted. CLI users can run `aims upload ./photo.png --print url`; MCP users can call `upload_image` with an absolute local `file_path`.
 
 ---
 
@@ -25,7 +41,7 @@ Generate one or more images. Provide `image_urls` to switch to image-to-image ed
 | `quality` | string | model default | `low`, `medium`, `high`, `auto` (model dependent). |
 | `background` | string | `auto` | `auto`, `transparent`, `opaque` (GPT image models). |
 | `style_slug` | string | — | Style preset slug, e.g. `anime-style`. |
-| `image_urls` | string[] | — | 1–10 http/https URLs → image-to-image edit. |
+| `image_urls` | string[] | none | 1 to 10 workspace-hosted image URLs for image editing. |
 | `seed` | integer | — | Deterministic output. |
 | `safety_tolerance` | string | model default | `"1"` (strict) … `"6"` (lenient). |
 | `make_public` | boolean | false | Returns a `share_url`. |
@@ -44,7 +60,7 @@ Generate one or more images. Provide `image_urls` to switch to image-to-image ed
 }
 ```
 
-Failed images include `status: "failed"`, an `error`, and `credits_refunded`.
+Failed images include `status: "failed"`, an `error`, and `credits_refunded`. Batch responses remain HTTP 200 so callers retain per-image outcomes. `success` is false when no image completed. Partial batches include both completed and failed images. The CLI exits 1 and MCP sets `isError: true` for any image failure while preserving all results.
 
 ---
 

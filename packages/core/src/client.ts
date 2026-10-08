@@ -3,11 +3,13 @@ import type {
   AimsClientOptions,
   ImageGenerateParams,
   ImageGenerateResult,
+  ImageUploadResult,
   ModelsResult,
   VideoGenerateParams,
   VideoGenerateResult,
 } from "./types.js"
 import { resolveBaseUrl } from "./config.js"
+import { MAX_IMAGE_UPLOAD_BYTES } from "./files.js"
 
 /** Error thrown when the AIMS API returns a non-2xx response or the request fails. */
 export class AimsApiError extends Error {
@@ -64,23 +66,37 @@ export class AimsClient {
     const url = `${this.baseUrl}${path}`
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+    const multipart = body instanceof FormData
 
-    let res: Response
     try {
-      res = await this.fetchImpl(url, {
+      const res = await this.fetchImpl(url, {
         method,
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
+          ...(multipart ? {} : { "Content-Type": "application/json" }),
           Accept: "application/json",
         },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: multipart ? body : body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
       })
+      const text = await res.text()
+      let json: unknown
+      try {
+        json = text ? JSON.parse(text) : {}
+      } catch {
+        json = { raw: text }
+      }
+
+      if (!res.ok) {
+        const message = errorMessageFromBody(json, res.status)
+        throw new AimsApiError(message, res.status, json)
+      }
+      return json as T
     } catch (err) {
-      if ((err as Error)?.name === "AbortError") {
+      if (controller.signal.aborted) {
         throw new AimsApiError(`Request timed out after ${this.timeoutMs} ms`, 408)
       }
+      if (err instanceof AimsApiError) throw err
       // Report only the path (not the host) to avoid leaking infra topology
       // hints from a custom AIMS_BASE_URL into error output/logs.
       const safePath = (() => {
@@ -97,26 +113,22 @@ export class AimsClient {
     } finally {
       clearTimeout(timeout)
     }
-
-    const text = await res.text()
-    let json: unknown
-    try {
-      json = text ? JSON.parse(text) : {}
-    } catch {
-      json = { raw: text }
-    }
-
-    if (!res.ok) {
-      const message = errorMessageFromBody(json, res.status)
-      throw new AimsApiError(message, res.status, json)
-    }
-    return json as T
   }
 
   /** Generate one or more images. Provide `image_urls` for image-to-image editing. */
   generateImage(params: ImageGenerateParams): Promise<ImageGenerateResult> {
     if (!params.prompt?.trim()) throw new Error("`prompt` is required")
     return this.request<ImageGenerateResult>("POST", "/images/generate", params)
+  }
+
+  /** Upload a source image to this workspace. Requires the media:write scope. */
+  uploadImage(file: Blob, filename = "image"): Promise<ImageUploadResult> {
+    if (file.size === 0 || file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      throw new Error("Source image must be non-empty and no larger than 20 MiB")
+    }
+    const body = new FormData()
+    body.append("file", file, filename)
+    return this.request<ImageUploadResult>("POST", "/uploads", body)
   }
 
   /** Generate a video from a prompt (and optional source image(s)). */

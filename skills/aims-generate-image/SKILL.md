@@ -22,7 +22,7 @@ Create images via the AIMS API. There are three ways to call it — **prefer the
 - **quality** (optional): `low`, `medium`, `high`, or `auto` (model dependent).
 - **style_slug** (optional): style preset slug, e.g. `anime-style`.
 - **seed** (optional): integer seed for deterministic/reproducible output.
-- **image_urls** (optional): http/https URLs to edit/transform existing images (image-to-image). Use the `aims-edit-image` skill for edit-focused requests.
+- **image_urls** (optional): workspace-hosted source image URLs. Upload local files with `upload_image` or `aims upload <file>` first. Use the `aims-edit-image` skill for the upload and editing workflow.
 
 ## Recommended models (credits are per image)
 
@@ -40,6 +40,7 @@ Discover what's live for the workspace with the `list_models` MCP tool, `aims mo
 2. Pick a model. Default to `fal-ai/nano-banana-2` unless the user needs crisp text (use `openai/gpt-image-2`) or top quality (`fal-ai/nano-banana-pro`).
 3. Call the API (MCP tool > CLI > HTTP).
 4. Return the resulting image URL(s) to the user. Report `credits_used` and `credits_remaining`.
+5. Inspect per-image outcomes. Partial and total failures set MCP `isError` or CLI exit 1 while retaining completed results. Retry only failed work.
 
 ## HTTP example
 

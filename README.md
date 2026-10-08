@@ -88,15 +88,18 @@ aims-agent/
 
 | | MCP tool | CLI | HTTP |
 | --- | --- | --- | --- |
+| Upload source image | `upload_image` | `aims upload <file> --json` | `POST /uploads` |
 | Text-to-image | `generate_image` | `aims image --json` | `POST /images/generate` |
 | Image-to-image edit | `edit_image` | `aims edit --json` | `POST /images/generate` + `image_urls` |
-| Text/image-to-video | `generate_video` | `aims video --json` | `POST /videos/generate` |
+| Text/image/reference/frame/extended video | `generate_video` | `aims video --json` | `POST /videos/generate` |
 | List models | `list_models` | `aims models --json` | `GET /models` |
 | Account & credits | `get_account` | `aims whoami --json` | `GET /images/generate` |
 
 > **Note:** Image-to-video and reference-to-video use dedicated model ids (e.g. `fal-ai/veo3.1/fast/image-to-video`). Pass `image_url` (or `image_urls`) together with that model id. Use `list_models` / `aims models` / `GET /models` to discover them.
 
 Discover live models and pricing any time — see [`reference/models.md`](reference/models.md). Prompting tips in [`reference/prompting.md`](reference/prompting.md).
+
+Upload local source images with `aims upload <file>` or MCP `upload_image` before editing or image-to-video. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL as the reference; arbitrary external image URLs are not accepted.
 
 ## Configuration
 
@@ -115,6 +118,7 @@ See [AGENTS.md](AGENTS.md) for the agent-oriented CLI/MCP contract (`--json`, `-
 pnpm install
 pnpm build        # builds core → mcp → cli (topological order)
 pnpm typecheck
+pnpm test         # local HTTP and MCP stdio integration tests, no paid API calls
 
 # run locally
 AIMS_API_KEY=aims_xxx node packages/mcp/dist/index.js   # MCP server (stdio)

@@ -39,13 +39,20 @@ All tools return JSON (`url`, `id`, `credits_used`, `credits_remaining`). Read-o
 
 | Tool | Description |
 | --- | --- |
+| `upload_image` | Upload a local source image using `file_path`, up to 20 MiB. Requires `media:write`. |
 | `generate_image` | Text-to-image (and image-to-image via `image_urls`). |
 | `edit_image` | Image-to-image editing from source URL(s). |
-| `generate_video` | Text-to-video and image-to-video. |
+| `generate_video` | Text, image, reference, first/last-frame, and extended video generation. |
 | `list_models` | Discover available image/video models and costs (read-only). |
 | `get_account` | Workspace id, credit balance, and scopes (read-only). |
 
 Suggested order: `get_account` → `list_models` → generate. Defaults: `fal-ai/nano-banana-2` (images), `fal-ai/veo3.1/fast` (video). Video credits are per second.
+
+For a local source image, call `upload_image` with its absolute file path, then pass the returned workspace URL to `edit_image` or `generate_video`. PNG, JPEG, WebP, GIF, AVIF, HEIC, and BMP are supported. Arbitrary external image URLs are not accepted.
+
+For first/last-frame models, provide `first_frame_url` and `last_frame_url`. For extension models, provide `extend_video_url` from a video generated in the same workspace. Reference models accept `image_urls`.
+
+Partial and total image failures return `isError: true` with the complete JSON result, including any completed images. Preserve those completed results and retry only the missing work. The server never retries paid generations automatically.
 
 ## Environment
 

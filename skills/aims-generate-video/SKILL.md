@@ -7,7 +7,7 @@ description: Generate videos from a text prompt (or a source image) with AI Medi
 
 Create videos via the AIMS API. **Prefer the first available method:**
 
-1. **MCP tool** `generate_video` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `duration`, `aspect_ratio`, `audio`, `image_url`, `image_urls`, `resolution`, `negative_prompt`, `make_public`. Returns JSON (`url`, `credits_used`).
+1. **MCP tool** `generate_video` if the `aims` MCP server is connected. Pass `prompt` and the selected model's required source fields. Frame models use `first_frame_url` and `last_frame_url`; extension models use `extend_video_url`. Returns JSON with the video URL and credit usage.
 2. **CLI** `aims video "<prompt>" --duration 6 --json` — if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Never run `aims login` without `--key`.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/videos/generate` with `Authorization: Bearer $AIMS_API_KEY`.
 
@@ -20,6 +20,8 @@ Create videos via the AIMS API. **Prefer the first available method:**
 - **audio** (optional): enable generated audio when the model supports it.
 - **image_url** (optional): a source image for **image-to-video** models.
 - **image_urls** (optional): reference image URLs for **reference-to-video** models.
+- **first_frame_url** / **last_frame_url**: start and end frames required by first-last-frame models.
+- **extend_video_url**: source video from the same workspace for extension models.
 - **resolution** (optional): output resolution when supported (e.g. `720p`, `1080p`).
 - **negative_prompt** (optional): elements to avoid, when the model supports it.
 - **make_public** (optional): make the result publicly shareable (returns a `share_url`).
@@ -33,6 +35,8 @@ Create videos via the AIMS API. **Prefer the first available method:**
 - `fal-ai/kling-video/v3/standard/text-to-video` — Kling v3 (67/s).
 
 For image-to-video, use an `…/image-to-video` model id and pass `image_url`. Discover live models with the `list_models` MCP tool, `aims models --type video`, or `GET /api/v1/videos/generate`.
+
+Upload local source images with MCP `upload_image` or `aims upload <file> --print url` and use the returned workspace URL. Uploads require `media:write`; arbitrary external image URLs are not accepted. See [the upload contract](../../reference/api.md#post-uploads).
 
 > Cost note: a 5-second clip on `fal-ai/veo3.1/fast` costs ~150 credits (30/s × 5s). Confirm with the user before generating long or expensive clips.
 
@@ -68,7 +72,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/videos/generate \
     "prompt": "slow cinematic reveal, gentle camera push-in",
     "model": "fal-ai/veo3.1/fast/image-to-video",
     "duration": 5,
-    "image_url": "https://example.com/keyframe.png"
+    "image_url": "WORKSPACE_URL_FROM_UPLOAD"
   }'
 ```
 

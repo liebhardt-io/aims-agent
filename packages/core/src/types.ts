@@ -26,6 +26,12 @@ export interface AimsClientOptions {
   fetch?: typeof fetch
 }
 
+export interface ImageUploadResult {
+  success: boolean
+  id: string
+  url: string
+}
+
 export interface ImageGenerateParams {
   /** Required text description of the image. */
   prompt: string

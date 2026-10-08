@@ -13,6 +13,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm --filter @ai-media-studio/core run build && pnpm -r typecheck",
+    "test": "pnpm build && node --test packages/*/test/*.test.mjs",
     "clean": "pnpm -r clean",
     "mcp": "node packages/mcp/dist/index.js",
     "cli": "node packages/cli/dist/index.js"
