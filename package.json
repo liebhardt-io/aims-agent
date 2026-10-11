@@ -5,7 +5,7 @@
   "description": "Generate images and videos with AI agents — MCP server, CLI, and Claude Code skills for AI Media Studio (AIMS).",
   "license": "Apache-2.0",
   "type": "module",
-  "homepage": "https://github.com/liebhardt-io/aims-agent",
+  "homepage": "https://www.ai-media-studio.com/developers",
   "repository": {
     "type": "git",
     "url": "https://github.com/liebhardt-io/aims-agent.git"
