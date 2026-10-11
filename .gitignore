@@ -22,3 +22,6 @@ npm-debug.log*
 
 # local CLI auth (never commit)
 .aims/
+
+# Amp portal metadata (local to each orb)
+.amp/portals/*

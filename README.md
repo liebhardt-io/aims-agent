@@ -127,6 +127,18 @@ AIMS_API_KEY=aims_xxx node packages/mcp/dist/index.js   # MCP server (stdio)
 node packages/cli/dist/index.js whoami                  # CLI
 ```
 
+### Amp orbs
+
+`.agents/setup` uses the orb's preinstalled Node.js (>=18), ensures the pnpm
+version pinned in `package.json`, installs dependencies with the frozen lockfile,
+and builds all packages. Amp snapshots this environment for reuse by fresh orbs;
+when setup reruns after repository changes, pnpm reuses its cached dependencies.
+Run `.agents/setup` locally in an orb to verify or repair the environment.
+
+No resume script or persistent services are needed: builds and tests require no
+API key and use local HTTP fixtures. For live AIMS calls, provide `AIMS_API_KEY`
+through Amp secrets; setup never authenticates or stores credentials.
+
 ## Publishing
 
 `@ai-media-studio/core` is internal and **bundled** into the published packages (it is marked private and is not published). Only `@ai-media-studio/mcp` and `@ai-media-studio/cli` go to npm:
