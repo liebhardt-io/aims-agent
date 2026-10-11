@@ -8,7 +8,7 @@
     "url": "https://github.com/liebhardt-io/aims-agent.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/liebhardt-io/aims-agent#readme",
+  "homepage": "https://www.ai-media-studio.com/developers",
   "type": "module",
   "bin": {
     "aims": "./dist/index.js"

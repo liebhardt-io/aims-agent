@@ -2,6 +2,8 @@
 
 **Generate images and videos with AI agents.** `aims-agent` makes [AI Media Studio (AIMS)](https://app.ai-media-studio.com) available to Claude Code, Cursor, Codex, Claude Desktop, and any MCP or HTTP agent — through an **MCP server**, a **CLI**, and **Agent Skills**, all backed by the same API key.
 
+Website: [ai-media-studio.com](https://www.ai-media-studio.com) · Developer overview: [ai-media-studio.com/developers](https://www.ai-media-studio.com/developers) · Model prices: [ai-media-studio.com/ai-model-prices](https://www.ai-media-studio.com/ai-model-prices)
+
 > Turn a prompt into a finished image or video, right from your agent:
 > *"Make a 16:9 image of a red panda astronaut, then a 6-second video panning across it."*
 
