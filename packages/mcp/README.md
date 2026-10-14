@@ -57,7 +57,7 @@ Partial and total image failures return `isError: true` with the complete JSON r
 ## Environment
 
 - `AIMS_API_KEY` (required unless `aims login --key` was used) — your `aims_` key.
-- `AIMS_BASE_URL` (optional) — defaults to `https://app.ai-media-studio.com/api/v1`.
+- `AIMS_BASE_URL` (optional) — defaults to `https://app.ai-media-studio.com/api/v1`. `AIMS_API_BASE_URL` is accepted as an alias.
 
 ## Try it
 

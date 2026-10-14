@@ -7,8 +7,10 @@
  *
  *   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
  */
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { PACKAGE_VERSION, TOOL_CATALOG } from "./format.js"
+import { PACKAGE_VERSION } from "./format.js"
 import { createAimsServer } from "./server.js"
 import { resolveBaseUrl } from "@ai-media-studio/core"
 
@@ -24,7 +26,8 @@ Options:
 
 Environment:
   AIMS_API_KEY     API key (or ~/.aims/config.json from \`aims login --key\`)
-  AIMS_BASE_URL    API base URL (default https://app.ai-media-studio.com/api/v1)
+  AIMS_BASE_URL    API base URL (default https://app.ai-media-studio.com/api/v1;
+                   AIMS_API_BASE_URL is accepted as an alias)
 
 Examples:
   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
@@ -40,8 +43,17 @@ function printVersion(): void {
   process.stdout.write(`${PACKAGE_VERSION}\n`)
 }
 
-function printTools(): void {
-  process.stdout.write(JSON.stringify({ name: "aims", version: PACKAGE_VERSION, tools: TOOL_CATALOG }, null, 2) + "\n")
+/** List tools through the real server so the catalog can never drift from registration. */
+async function printTools(): Promise<void> {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createAimsServer()
+  const client = new Client({ name: "aims-mcp-list-tools", version: PACKAGE_VERSION })
+  await server.connect(serverTransport)
+  await client.connect(clientTransport)
+  const { tools } = await client.listTools()
+  await client.close()
+  const catalog = tools.map(({ name, description }) => ({ name, description }))
+  process.stdout.write(JSON.stringify({ name: "aims", version: PACKAGE_VERSION, tools: catalog }, null, 2) + "\n")
 }
 
 async function main(): Promise<void> {
@@ -55,7 +67,7 @@ async function main(): Promise<void> {
     return
   }
   if (args.includes("--list-tools")) {
-    printTools()
+    await printTools()
     return
   }
   if (args.length > 0) {
