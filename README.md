@@ -108,7 +108,7 @@ Upload local source images with `aims upload <file>` before editing or image-to-
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AIMS_API_KEY` | — | Your `aims_` key (required). |
-| `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL. |
+| `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL. `AIMS_API_BASE_URL` is accepted as an alias. |
 
 The CLI also persists the key at `~/.aims/config.json` (mode `600`) via `aims login --key`. Agents should always pass `--key` or `AIMS_API_KEY` — `aims login` only prompts when stdin is a TTY.
 

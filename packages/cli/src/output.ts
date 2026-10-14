@@ -1,5 +1,9 @@
-import { mkdir, stat, writeFile } from "node:fs/promises"
+import { createWriteStream } from "node:fs"
+import { mkdir, rename, rm, stat } from "node:fs/promises"
 import { dirname, extname, join, sep } from "node:path"
+import { Readable } from "node:stream"
+import { pipeline } from "node:stream/promises"
+import type { ReadableStream } from "node:stream/web"
 import { InvalidArgumentError } from "commander"
 
 /** Collect repeatable CLI options into an array. */
@@ -28,15 +32,29 @@ export function deriveFilename(url: string, index: number, fallbackExt: string):
   return `${String(index).padStart(2, "0")}-output${fallbackExt}`
 }
 
-/** Download a URL to a local path (creating parent directories). */
-export async function downloadTo(url: string, filePath: string): Promise<void> {
-  const res = await fetch(url)
-  if (!res.ok) {
+const DOWNLOAD_TIMEOUT_MS = 600_000
+
+/**
+ * Stream a URL to a local path (creating parent directories). The deadline covers
+ * the whole body, and a partial file never replaces the destination.
+ */
+export async function downloadTo(url: string, filePath: string, timeoutMs = DOWNLOAD_TIMEOUT_MS): Promise<void> {
+  const signal = AbortSignal.timeout(timeoutMs)
+  const res = await fetch(url, { signal }).catch((error) => {
+    throw signal.aborted ? new Error(`Download timed out after ${timeoutMs} ms`) : error
+  })
+  if (!res.ok || !res.body) {
     throw new Error(`Failed to download ${url} (HTTP ${res.status})`)
   }
-  const buf = Buffer.from(await res.arrayBuffer())
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, buf)
+  const partial = `${filePath}.${process.pid}.part`
+  try {
+    await pipeline(Readable.fromWeb(res.body as ReadableStream), createWriteStream(partial))
+    await rename(partial, filePath)
+  } catch (error) {
+    await rm(partial, { force: true })
+    throw signal.aborted ? new Error(`Download timed out after ${timeoutMs} ms`) : error
+  }
 }
 
 /**

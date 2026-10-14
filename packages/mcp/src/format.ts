@@ -1,8 +1,10 @@
+import { createRequire } from "node:module"
 import { z } from "zod"
 import {
   AimsApiError,
   AimsClient,
   imageGenerationOutcome,
+  videoGenerationOutcome,
   apiErrorHint,
   missingApiKeyMessage,
   resolveApiKey,
@@ -11,7 +13,7 @@ import {
   type VideoGenerateResult,
 } from "@ai-media-studio/core"
 
-export const PACKAGE_VERSION = "0.3.0"
+export const { version: PACKAGE_VERSION } = createRequire(import.meta.url)("../package.json") as { version: string }
 
 export function getClient(): AimsClient {
   const apiKey = resolveApiKey()
@@ -108,7 +110,7 @@ export const videoOutputSchema = z
     video: z
       .object({
         id: z.string(),
-        url: z.string(),
+        url: z.string().nullable(),
         share_url: z.string().optional(),
         status: z.string(),
         model: z.string(),
@@ -158,37 +160,6 @@ export function imageResult(result: ImageGenerateResult): ToolResult {
 }
 
 export function videoResult(result: VideoGenerateResult): ToolResult {
-  return ok({ ...result })
+  const outcome = videoGenerationOutcome(result)
+  return { ...ok({ ...outcome.result }), ...(outcome.isError ? { isError: true } : {}) }
 }
-
-export const TOOL_CATALOG = [
-  {
-    name: "upload_image",
-    description: "Upload supplied base64 raster-image contents, up to 20 MiB, to the workspace. Requires media:write. Reads no local files. Returns a workspace-hosted URL for editing or image-to-video.",
-  },
-  {
-    name: "generate_image",
-    description:
-      "Generate one or more images from a text prompt. Returns JSON with hosted image URL(s), ids, and credit usage. Provide image_urls for image-to-image. Spends workspace credits.",
-  },
-  {
-    name: "edit_image",
-    description:
-      "Transform existing image(s) with a text instruction. Requires image_urls (http/https). Returns JSON with the edited image URL(s) and credit usage.",
-  },
-  {
-    name: "generate_video",
-    description:
-      "Generate a video from a text prompt. Supports image-to-video via image_url. Returns JSON with the hosted MP4 URL and credit usage. Credits are per second; can take a few minutes.",
-  },
-  {
-    name: "list_models",
-    description:
-      "List live image and video model ids and credit costs. Use a returned id as the model argument. Read-only.",
-  },
-  {
-    name: "get_account",
-    description:
-      "Show workspace id, credit balance, and API key scopes. Read-only. Call this before expensive video jobs.",
-  },
-] as const

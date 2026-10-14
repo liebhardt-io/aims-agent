@@ -127,7 +127,7 @@ export interface VideoGenerateParams {
 
 export interface GeneratedVideo {
   id: string
-  url: string
+  url: string | null
   share_url?: string
   status: "completed" | "failed" | string
   model: string

@@ -55,12 +55,13 @@ test("discovery output schemas preserve model settings after tool discovery", as
   assert.deepEqual(account.structuredContent.available_models, [model])
 })
 
-test("video tools expose and forward every required video source field", async (t) => {
+test("video tools forward every video source field and flag incomplete videos", async (t) => {
   const home = await temporaryHome(t)
   let received
+  let reply = videoResult
   const baseUrl = await serve(t, async (request, response) => {
     received = JSON.parse(await body(request))
-    json(response, videoResult)
+    json(response, reply)
   })
   const client = await connect(t, home, baseUrl)
   const tools = await client.listTools()
@@ -77,6 +78,11 @@ test("video tools expose and forward every required video source field", async (
   const result = await client.callTool({ name: "generate_video", arguments: args })
   assert.equal(result.isError, undefined)
   assert.deepEqual(received, args)
+  const failed = { ...videoResult, success: false, video: { ...videoResult.video, url: null, status: "failed", error: "Provider unavailable" } }
+  reply = failed
+  const failure = await client.callTool({ name: "generate_video", arguments: { prompt: "test" } })
+  assert.equal(failure.isError, true)
+  assert.deepEqual(failure.structuredContent.video, failed.video)
 })
 
 test("upload_image transfers supplied image contents and returns a workspace URL", async (t) => {

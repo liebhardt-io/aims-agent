@@ -52,7 +52,7 @@ export function writeAimsFileConfig(config: AimsFileConfig): string {
   return CONFIG_PATH
 }
 
-/** Resolve the API base URL: explicit > env > saved config > default. */
+/** Resolve the API base URL: explicit > AIMS_BASE_URL (alias AIMS_API_BASE_URL) > saved config > default. */
 export function resolveBaseUrl(explicit?: string): string {
   const raw =
     explicit ||
@@ -66,4 +66,10 @@ export function resolveBaseUrl(explicit?: string): string {
 /** Resolve the API key: explicit > AIMS_API_KEY > ~/.aims/config.json. */
 export function resolveApiKey(explicit?: string): string | undefined {
   return explicit || process.env.AIMS_API_KEY || readAimsFileConfig().apiKey
+}
+
+/** Show only the `aims_` prefix and the last four characters of a saved key. */
+export function redactApiKey(key: string): string {
+  const prefix = key.startsWith("aims_") ? "aims_" : ""
+  return key.length - prefix.length >= 12 ? `${prefix}…${key.slice(-4)}` : `${prefix}…`
 }

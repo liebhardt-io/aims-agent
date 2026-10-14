@@ -17,6 +17,7 @@ Transform existing images with a text instruction. This uses the same image endp
 - **image_urls** (required): 1 to 10 workspace-hosted image URLs. Upload local files with MCP `upload_image`, CLI `aims upload <file>`, or HTTP `POST /uploads` first. Uploads require `media:write`; see [the upload contract](../../reference/api.md#post-uploads).
 - **model** (optional): defaults to an edit-capable model. Examples: `fal-ai/nano-banana-2`, `fal-ai/nano-banana-pro`, `fal-ai/flux-pro/kontext`, `openai/gpt-image-2`.
 - **aspect_ratio** (optional): defaults to `auto` to preserve the original proportions.
+- **n**, **seed**, **quality**, **style_slug**, **size** (optional): same meaning as for image generation; `n` (1-8) returns several edited variations.
 
 ## Steps
 

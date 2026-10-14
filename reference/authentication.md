@@ -32,7 +32,7 @@ X-API-Key: aims_xxxxxxxxxxxxxxxxxxxxxxxx
 | CLI (`@ai-media-studio/cli`) | `aims login` (saved to `~/.aims/config.json`, mode `600`), or `AIMS_API_KEY`, or `--key` |
 | Direct HTTP | `Authorization` / `X-API-Key` header you set |
 
-Override the API base URL with `AIMS_BASE_URL` (default `https://app.ai-media-studio.com/api/v1`).
+Override the API base URL with `AIMS_BASE_URL` (default `https://app.ai-media-studio.com/api/v1`; `AIMS_API_BASE_URL` is accepted as an alias).
 
 ## Verify a key
 

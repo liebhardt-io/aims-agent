@@ -9,7 +9,7 @@ export function apiErrorHint(status: number): string {
     return "Workspace is out of credits. Check balance: aims whoami --json"
   }
   if (status === 403) {
-    return "API key is missing the required scope. Create a key with image:generate and/or video:generate."
+    return "API key is missing the required scope. Generation needs image:generate or video:generate; uploads need media:write."
   }
   if (status === 429) {
     return "Rate limited. Wait and retry; do not loop immediately."

@@ -7,16 +7,19 @@
  */
 import { Command } from "commander"
 import * as readline from "node:readline/promises"
+import { createRequire } from "node:module"
 import { stdin as input, stdout as output } from "node:process"
 import {
   AimsClient,
   DEFAULT_BASE_URL,
   imageGenerationOutcome,
   LOGIN_EXAMPLE,
+  redactApiKey,
   readImageFile,
   type ImageGenerateParams,
   type ModelInfo,
   type VideoGenerateParams,
+  videoGenerationOutcome,
 } from "@ai-media-studio/core"
 import { configPath, readConfig, resolveApiKey, resolveBaseUrl, writeConfig } from "./config.js"
 import { collect, parseIntOption, resolveOutputPath, downloadTo } from "./output.js"
@@ -24,7 +27,7 @@ import { die, handleError, requireApiKey, usage, USAGE_EXIT } from "./errors.js"
 import { isInteractive, resolvePrompt } from "./prompt.js"
 import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
 
-const VERSION = "0.3.0"
+const { version: VERSION } = createRequire(import.meta.url)("../package.json") as { version: string }
 
 interface GlobalOpts {
   key?: string
@@ -267,7 +270,7 @@ Examples:
     const saved = readConfig()
     const payload = {
       config_path: configPath(),
-      api_key: saved.apiKey ? `${saved.apiKey.slice(0, 8)}…` : null,
+      api_key: saved.apiKey ? redactApiKey(saved.apiKey) : null,
       base_url: saved.baseUrl || null,
     }
     if (modeOf(g) === "json") printJson(payload)
@@ -368,26 +371,109 @@ Examples:
   })
 
 // ---------------------------------------------------------------------------
-// image
+// image / edit
 // ---------------------------------------------------------------------------
-program
-  .command("image")
-  .description("Generate image(s) from a text prompt")
-  .argument("[prompt...]", "image description (or pass --stdin / pipe)")
-  .option("-m, --model <model>", "model id (e.g. fal-ai/nano-banana-2)")
-  .option("-n, --n <count>", "number of images (1-8)", parseIntOption)
-  .option("-a, --aspect-ratio <ratio>", "e.g. 16:9, 1:1, 9:16")
-  .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
-  .option("-s, --size <size>", "pixel size, e.g. 1024x1024 (OpenAI models)")
-  .option("-f, --output-format <fmt>", "png, jpeg, webp")
-  .option("-q, --quality <quality>", "low, medium, high, auto")
-  .option("--style <slug>", "style preset slug")
-  .option("--seed <seed>", "seed for deterministic output")
-  .option("-i, --image-url <url>", "workspace image URL for editing (repeatable; use aims upload for local files)", collect, [])
-  .option("--make-public", "make the result publicly shareable", false)
-  .option("-o, --output <path>", "download result(s) to a file or directory")
-  .option("--stdin", "read prompt from stdin", false)
-  .option("--dry-run", "print the request and exit without spending credits", false)
+function printDryRun(g: GlobalOpts, path: string, body: ImageGenerateParams | VideoGenerateParams): void {
+  if (modeOf(g) === "json") {
+    printJson({ dry_run: true, method: "POST", path, body })
+    return
+  }
+  printFields({ dry_run: true, method: "POST", path })
+  printJson(body)
+}
+
+/** Options shared by `image` and `edit`; both call POST /images/generate. */
+function imageOptions(command: Command, aspectRatioHelp: string): Command {
+  return command
+    .option("-m, --model <model>", "model id (e.g. fal-ai/nano-banana-2)")
+    .option("-n, --n <count>", "number of images (1-8)", parseIntOption)
+    .option("-a, --aspect-ratio <ratio>", aspectRatioHelp)
+    .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
+    .option("-s, --size <size>", "pixel size, e.g. 1024x1024 (OpenAI models)")
+    .option("-f, --output-format <fmt>", "png, jpeg, webp")
+    .option("-q, --quality <quality>", "low, medium, high, auto")
+    .option("--style <slug>", "style preset slug")
+    .option("--seed <seed>", "seed for deterministic output")
+    .option("--make-public", "make the result publicly shareable", false)
+    .option("-o, --output <path>", "download result(s) to a file or directory")
+    .option("--stdin", "read prompt from stdin", false)
+    .option("--dry-run", "print the request and exit without spending credits", false)
+}
+
+async function runImageGeneration(
+  promptParts: string[],
+  opts: Record<string, any>,
+  command: Command,
+  example: string,
+  progressMessage: string,
+): Promise<void> {
+  const g = command.optsWithGlobals() as GlobalOpts
+  const prompt = await resolvePrompt(promptParts, opts, usage, example)
+  const params: ImageGenerateParams = {
+    prompt,
+    model: opts.model,
+    n: opts.n,
+    aspect_ratio: opts.aspectRatio,
+    resolution: opts.resolution,
+    size: opts.size,
+    output_format: opts.outputFormat,
+    quality: opts.quality,
+    style_slug: opts.style,
+    seed: opts.seed,
+    image_urls: opts.imageUrl?.length ? opts.imageUrl : undefined,
+    make_public: opts.makePublic || undefined,
+  }
+  if (opts.dryRun) {
+    printDryRun(g, "/images/generate", params)
+    return
+  }
+  const client = makeClient(g)
+  try {
+    const mode = modeOf(g)
+    progress(progressMessage, Boolean(g.quiet) || mode !== "text")
+    const outcome = imageGenerationOutcome(await client.generateImage(params))
+    const result = outcome.result
+    const urls = result.images.flatMap((im) => im.status === "completed" && im.url ? [im.url] : [])
+    let downloads: Downloads = { saved: [], download_errors: [] }
+    if (opts.output) {
+      downloads = await saveDownloads(urls, opts.output, `.${opts.outputFormat || "png"}`)
+    }
+    if (mode === "json") {
+      printJson({ ...result, ...downloads })
+    } else if (mode === "url") {
+      for (const url of urls) process.stdout.write(`${url}\n`)
+    } else {
+      for (const [i, img] of result.images.entries()) {
+        printFields({
+          index: i + 1,
+          id: img.id,
+          url: img.url,
+          share_url: img.share_url,
+          status: img.status,
+          error: img.error,
+        })
+      }
+      printFields({
+        credits_used: result.credits_used,
+        credits_remaining: result.credits_remaining,
+        style_applied: result.style_applied,
+        saved: downloads.saved.join(", ") || undefined,
+      })
+    }
+    if (outcome.isError) reportImageFailure(outcome.failed)
+  } catch (err) {
+    handleError(err)
+  }
+}
+
+imageOptions(
+  program
+    .command("image")
+    .description("Generate image(s) from a text prompt")
+    .argument("[prompt...]", "image description (or pass --stdin / pipe)")
+    .option("-i, --image-url <url>", "workspace image URL for editing (repeatable; use aims upload for local files)", collect, []),
+  "e.g. 16:9, 1:1, 9:16",
+)
   .addHelpText(
     "after",
     `
@@ -399,169 +485,35 @@ Examples:
   aims image "a red panda astronaut" --print url
 `,
   )
-  .action(async (promptParts: string[], opts, command: Command) => {
-    const g = command.optsWithGlobals() as GlobalOpts
-    const prompt = await resolvePrompt(
-      promptParts,
-      opts,
-      usage,
-      'aims image "<prompt>" --aspect-ratio 16:9 --json',
-    )
-    const params: ImageGenerateParams = {
-      prompt,
-      model: opts.model,
-      n: opts.n,
-      aspect_ratio: opts.aspectRatio,
-      resolution: opts.resolution,
-      size: opts.size,
-      output_format: opts.outputFormat,
-      quality: opts.quality,
-      style_slug: opts.style,
-      seed: opts.seed,
-      image_urls: opts.imageUrl?.length ? opts.imageUrl : undefined,
-      make_public: opts.makePublic || undefined,
-    }
-    if (opts.dryRun) {
-      const payload = { dry_run: true, method: "POST", path: "/images/generate", body: params }
-      if (modeOf(g) === "json") printJson(payload)
-      else {
-        printFields({ dry_run: true, method: "POST", path: "/images/generate" })
-        printJson(params)
-      }
-      return
-    }
-    const client = makeClient(g)
-    try {
-      progress("Generating image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
-      const outcome = imageGenerationOutcome(await client.generateImage(params))
-      const result = outcome.result
-      const urls = result.images.flatMap((im) => im.status === "completed" && im.url ? [im.url] : [])
-      const mode = modeOf(g)
-      let downloads: Downloads = { saved: [], download_errors: [] }
-      if (opts.output) {
-        const ext = `.${(opts.outputFormat as string) || "png"}`
-        downloads = await saveDownloads(urls, opts.output, ext)
-      }
-      if (mode === "json") {
-        printJson({ ...result, ...downloads })
-      } else if (mode === "url") {
-        for (const url of urls) process.stdout.write(`${url}\n`)
-      } else {
-        for (const [i, img] of result.images.entries()) {
-          printFields({
-            index: i + 1,
-            id: img.id,
-            url: img.url,
-            share_url: img.share_url,
-            status: img.status,
-            error: img.error,
-          })
-        }
-        printFields({
-          credits_used: result.credits_used,
-          credits_remaining: result.credits_remaining,
-          style_applied: result.style_applied,
-          saved: downloads.saved.join(", ") || undefined,
-        })
-      }
-      if (outcome.isError) reportImageFailure(outcome.failed)
-    } catch (err) {
-      handleError(err)
-    }
-  })
+  .action((promptParts: string[], opts, command: Command) =>
+    runImageGeneration(promptParts, opts, command, 'aims image "<prompt>" --aspect-ratio 16:9 --json', "Generating image(s)…"),
+  )
 
-// ---------------------------------------------------------------------------
-// edit (image-to-image)
-// ---------------------------------------------------------------------------
-program
-  .command("edit")
-  .description("Edit/transform existing image(s) with a text instruction")
-  .argument("[prompt...]", "edit instruction (or pass --stdin / pipe)")
-  .option("-i, --image-url <url>", "workspace source image URL (repeatable; use aims upload for local files)", collect, [])
-  .option("-m, --model <model>", "model id")
-  .option("-a, --aspect-ratio <ratio>", "defaults to auto to preserve proportions")
-  .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
-  .option("-f, --output-format <fmt>", "png, jpeg, webp")
-  .option("--make-public", "make the result publicly shareable", false)
-  .option("-o, --output <path>", "download result(s) to a file or directory")
-  .option("--stdin", "read prompt from stdin", false)
-  .option("--dry-run", "print the request and exit without spending credits", false)
+imageOptions(
+  program
+    .command("edit")
+    .description("Edit/transform existing image(s) with a text instruction")
+    .argument("[prompt...]", "edit instruction (or pass --stdin / pipe)")
+    .option("-i, --image-url <url>", "workspace source image URL (repeatable; use aims upload for local files)", collect, []),
+  "defaults to auto to preserve proportions",
+)
   .addHelpText(
     "after",
     `
 Examples:
   source_url=$(aims upload ./photo.jpg --print url) && aims edit "make it a night scene with neon" --image-url "$source_url" --json
   aims edit "combine these into a collage" --image-url "$A_URL" --image-url "$B_URL" --output ./out
+  aims edit "three lighting variations" --image-url "$SOURCE_URL" --n 3 --seed 42 --json
   echo "make it night" | aims edit --stdin --image-url "$SOURCE_URL" --json
 `,
   )
-  .action(async (promptParts: string[], opts, command: Command) => {
-    const g = command.optsWithGlobals() as GlobalOpts
+  .action((promptParts: string[], opts, command: Command) => {
     if (!opts.imageUrl?.length) {
       usage(
         "At least one --image-url is required.\n  aims upload ./photo.jpg --print url\n  aims edit \"make it a night scene\" --image-url \"$SOURCE_URL\" --json",
       )
     }
-    const prompt = await resolvePrompt(
-      promptParts,
-      opts,
-      usage,
-      'aims edit "<instruction>" --image-url "$SOURCE_URL" --json',
-    )
-    const params: ImageGenerateParams = {
-      prompt,
-      image_urls: opts.imageUrl,
-      model: opts.model,
-      aspect_ratio: opts.aspectRatio,
-      resolution: opts.resolution,
-      output_format: opts.outputFormat,
-      make_public: opts.makePublic || undefined,
-    }
-    if (opts.dryRun) {
-      const payload = { dry_run: true, method: "POST", path: "/images/generate", body: params }
-      if (modeOf(g) === "json") printJson(payload)
-      else {
-        printFields({ dry_run: true, method: "POST", path: "/images/generate" })
-        printJson(params)
-      }
-      return
-    }
-    const client = makeClient(g)
-    try {
-      progress("Editing image(s)…", Boolean(g.quiet) || modeOf(g) !== "text")
-      const outcome = imageGenerationOutcome(await client.generateImage(params))
-      const result = outcome.result
-      const urls = result.images.flatMap((im) => im.status === "completed" && im.url ? [im.url] : [])
-      const mode = modeOf(g)
-      let downloads: Downloads = { saved: [], download_errors: [] }
-      if (opts.output) {
-        const ext = `.${(opts.outputFormat as string) || "png"}`
-        downloads = await saveDownloads(urls, opts.output, ext)
-      }
-      if (mode === "json") printJson({ ...result, ...downloads })
-      else if (mode === "url") {
-        for (const url of urls) process.stdout.write(`${url}\n`)
-      } else {
-        for (const [i, img] of result.images.entries()) {
-          printFields({
-            index: i + 1,
-            id: img.id,
-            url: img.url,
-            share_url: img.share_url,
-            status: img.status,
-            error: img.error,
-          })
-        }
-        printFields({
-          credits_used: result.credits_used,
-          credits_remaining: result.credits_remaining,
-          saved: downloads.saved.join(", ") || undefined,
-        })
-      }
-      if (outcome.isError) reportImageFailure(outcome.failed)
-    } catch (err) {
-      handleError(err)
-    }
+    return runImageGeneration(promptParts, opts, command, 'aims edit "<instruction>" --image-url "$SOURCE_URL" --json', "Editing image(s)…")
   })
 
 // ---------------------------------------------------------------------------
@@ -621,26 +573,22 @@ Examples:
       make_public: opts.makePublic || undefined,
     }
     if (opts.dryRun) {
-      const payload = { dry_run: true, method: "POST", path: "/videos/generate", body: params }
-      if (modeOf(g) === "json") printJson(payload)
-      else {
-        printFields({ dry_run: true, method: "POST", path: "/videos/generate" })
-        printJson(params)
-      }
+      printDryRun(g, "/videos/generate", params)
       return
     }
     const client = makeClient(g)
     try {
       progress("Generating video… (this can take a few minutes)", Boolean(g.quiet) || modeOf(g) !== "text")
-      const result = await client.generateVideo(params)
+      const outcome = videoGenerationOutcome(await client.generateVideo(params))
+      const result = outcome.result
       const mode = modeOf(g)
       let downloads: Downloads = { saved: [], download_errors: [] }
-      if (opts.output && result.video.url) {
+      if (opts.output && !outcome.isError && result.video.url) {
         downloads = await saveDownloads([result.video.url], opts.output, ".mp4")
       }
       if (mode === "json") printJson({ ...result, ...downloads })
       else if (mode === "url") {
-        if (result.video.url) process.stdout.write(`${result.video.url}\n`)
+        if (!outcome.isError && result.video.url) process.stdout.write(`${result.video.url}\n`)
       } else {
         const v = result.video
         printFields({
@@ -657,6 +605,10 @@ Examples:
           credits_remaining: result.credits_remaining,
           saved: downloads.saved.join(", ") || undefined,
         })
+      }
+      if (outcome.isError) {
+        process.stderr.write(`Video generation did not complete${result.video?.error ? `: ${result.video.error}` : "."}\n`)
+        process.exitCode = 1
       }
     } catch (err) {
       handleError(err)

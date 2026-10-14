@@ -71,6 +71,19 @@ test("failed video downloads preserve the paid result in URL-only mode", async (
   assert.equal(output.stdout, `${baseUrl}/video.mp4\n`)
 })
 
+test("video exits 1 without printing a URL when the API reports an incomplete video", async (t) => {
+  const home = await temporaryHome(t)
+  const failed = { ...videoResult, success: false, video: { ...videoResult.video, url: null, status: "failed", error: "Provider unavailable" } }
+  const baseUrl = await serve(t, (_request, response) => json(response, failed))
+  const urls = await runCli(["video", "test", "--print", "url"], environment(home, baseUrl))
+  assert.equal(urls.code, 1)
+  assert.equal(urls.stdout, "")
+  assert.match(urls.stderr, /Provider unavailable/)
+  const output = await runCli(["video", "test", "--json"], environment(home, baseUrl))
+  assert.equal(output.code, 1)
+  assert.deepEqual(JSON.parse(output.stdout).video, failed.video)
+})
+
 test("video forwards reference images, first/last frames, and extension URLs", async (t) => {
   const home = await temporaryHome(t)
   let received
