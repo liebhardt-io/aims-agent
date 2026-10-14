@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: [self-hosted, msa2]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
