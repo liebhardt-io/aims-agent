@@ -20,7 +20,7 @@ export function getClient(): AimsClient {
   if (!apiKey) {
     throw new Error(
       missingApiKeyMessage() +
-        "\n  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp",
+        "\n  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y @ai-media-studio/mcp",
     )
   }
   return new AimsClient({ apiKey, baseUrl: resolveBaseUrl() })

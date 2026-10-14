@@ -26,6 +26,7 @@ import { collect, parseIntOption, resolveOutputPath, downloadTo } from "./output
 import { die, handleError, requireApiKey, usage, USAGE_EXIT } from "./errors.js"
 import { isInteractive, resolvePrompt } from "./prompt.js"
 import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
+import { webLogin } from "./web-login.js"
 
 const { version: VERSION } = createRequire(import.meta.url)("../package.json") as { version: string }
 
@@ -126,29 +127,40 @@ Discovery:
 // ---------------------------------------------------------------------------
 program
   .command("login")
-  .description("Save and validate an AIMS API key (idempotent)")
-  .option("--key <key>", "API key to save (preferred; skips the prompt)")
+  .description("Log in through a browser, or save and validate an AIMS API key")
+  .option("--key <key>", "API key to save (takes priority over browser login)")
+  .option("--web", "use browser login even without an interactive terminal")
+  .option("--no-browser", "print the approval URL without opening a browser")
+  .option("--paste", "paste an API key at an interactive prompt instead of browser login")
   .addHelpText(
     "after",
     `
 Examples:
+  aims login
+  aims login --web --no-browser
+  aims login --paste
   aims login --key aims_xxx
   AIMS_API_KEY=aims_xxx aims login
   aims login --key aims_xxx --json
 `,
   )
-  .action(async (opts: { key?: string }, command: Command) => {
+  .action(async (opts: { key?: string; web?: boolean; browser?: boolean; paste?: boolean }, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
     let key = opts.key || g.key || process.env.AIMS_API_KEY
+    const baseUrl = resolveBaseUrl(g.baseUrl)
     if (!key) {
-      if (!isInteractive()) {
-        usage(`No API key specified.\n  ${LOGIN_EXAMPLE}\n  AIMS_API_KEY=aims_xxx aims login`)
+      if (opts.web && opts.paste) usage("Choose either --web or --paste.")
+      if (opts.paste && !isInteractive()) usage(`--paste requires an interactive terminal.\n  ${LOGIN_EXAMPLE}`)
+      if (!isInteractive() && !opts.web) {
+        usage(`No API key specified.\n  ${LOGIN_EXAMPLE}\n  aims login --web --no-browser\n  AIMS_API_KEY=aims_xxx aims login`)
       }
-      key = await promptTty("Paste your AIMS API key (aims_...): ")
+      key = opts.paste
+        ? await promptTty("Paste your AIMS API key (aims_...): ")
+        : await webLogin(baseUrl, opts.browser).catch(handleError)
     }
     if (!key) usage(`No API key provided.\n  ${LOGIN_EXAMPLE}`)
 
-    const client = new AimsClient({ apiKey: key, baseUrl: resolveBaseUrl(g.baseUrl) })
+    const client = new AimsClient({ apiKey: key, baseUrl })
     try {
       const status = await client.account()
       const existing = readConfig()

@@ -1,8 +1,8 @@
 {
   "name": "aims",
   "displayName": "AI Media Studio (AIMS)",
-  "version": "0.3.0",
-  "description": "Generate images and videos with AI Media Studio. Bundles an MCP server and skills so agents can create and edit media.",
+  "version": "0.4.0",
+  "description": "Generate images and videos with AI Media Studio. Connects the hosted MCP server with browser approval and bundles skills for creating and editing media.",
   "author": {
     "name": "liebhardt.io",
     "url": "https://github.com/liebhardt-io"
@@ -20,11 +20,8 @@
   "skills": "./skills/",
   "mcpServers": {
     "aims": {
-      "command": "npx",
-      "args": ["-y", "-p", "@ai-media-studio/mcp@latest", "aims-mcp"],
-      "env": {
-        "AIMS_API_KEY": "${AIMS_API_KEY}"
-      }
+      "type": "http",
+      "url": "https://app.ai-media-studio.com/mcp"
     }
   }
 }

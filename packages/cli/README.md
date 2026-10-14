@@ -11,12 +11,19 @@ npm install -g @ai-media-studio/cli
 ## Authenticate
 
 ```bash
-aims login --key aims_xxx
+aims login                       # interactive: opens the browser
+aims login --web --no-browser    # explicit browser login; print URL only
+aims login --paste               # interactive: paste an existing key
+aims login --key aims_xxx        # non-interactive / automation
 ```
 
-The key is saved to `~/.aims/config.json` (mode `600`). You can also set `AIMS_API_KEY` or pass `--key` on any command.
+Browser login asks you to sign in and select a workspace. Approval requires a workspace **owner/admin** and creates an ordinary workspace API key, not a separate kind of credential. All CLI and hosted MCP connections can be revoked under **Workspace Settings → API** (API Keys), and share the workspace's credits and key scopes.
 
-If `--key` / `AIMS_API_KEY` is missing and stdin is not a TTY, `aims login` exits immediately with an example — it will not hang.
+The CLI validates the key with `get_account` before saving it to `~/.aims/config.json` (mode `600`); the token is never printed. Command-local `--key`, global `--key`, then `AIMS_API_KEY` take priority over browser login. Other commands also read the saved key. `aims logout` deletes the local credential only; revoke it in Workspace Settings to remove server access.
+
+If no explicit/environment key is available, interactive login defaults to the browser. Without a TTY, login exits immediately unless `--web` is supplied; `--paste` requires a TTY. `--no-browser` disables automatic opening but still prints the approval URL to stderr. Open it in a browser on the same machine as the CLI (or forward its loopback callback when using a remote machine). A random state and S256 PKCE protect the authorization-code flow; the callback binds to an ephemeral `127.0.0.1` port and times out after five minutes. Cancellation, incorrect state, or failed exchange/validation leaves saved config unchanged.
+
+Discovery uses `/.well-known/oauth-authorization-server` on the origin of the resolved API base URL (`--base-url`, environment, saved config, then production).
 
 ## Usage
 
@@ -73,6 +80,6 @@ For reference-to-video models, repeat `--image-urls <url>` for each reference. F
 
 ## Prefer MCP?
 
-`@ai-media-studio/cli` and [`@ai-media-studio/mcp`](https://www.npmjs.com/package/@ai-media-studio/mcp) share the same client and API key.
+Connect your MCP client to **https://app.ai-media-studio.com/mcp** and approve access in the browser; no API-key environment variable is needed. See the [MCP README](https://github.com/liebhardt-io/aims-agent/blob/main/packages/mcp/README.md) for client-specific configuration. The optional local [`@ai-media-studio/mcp`](https://www.npmjs.com/package/@ai-media-studio/mcp) stdio server shares the CLI's saved key or `AIMS_API_KEY`.
 
 Apache-2.0
