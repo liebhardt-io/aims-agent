@@ -1,12 +1,8 @@
 {
   "mcpServers": {
     "aims": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "-p", "@ai-media-studio/mcp@latest", "aims-mcp"],
-      "env": {
-        "AIMS_API_KEY": "${AIMS_API_KEY}"
-      }
+      "type": "http",
+      "url": "https://app.ai-media-studio.com/mcp"
     }
   }
 }

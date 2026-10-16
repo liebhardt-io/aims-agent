@@ -21,7 +21,7 @@ aims login --key <aims_key>
 export AIMS_API_KEY=<aims_key>
 ```
 
-Do not run `aims login` without `--key` (it only prompts when stdin is a TTY).
+Do not run bare `aims login` from an agent: interactive no-key login opens a browser, while non-TTY no-key login refuses. Only start `aims login --web --no-browser` when the user explicitly wants browser approval, then give them the printed URL. `--web` opts in without a TTY; `--no-browser` prevents automatic opening; `--paste` keeps the prior interactive key prompt. Command-local/global `--key` and `AIMS_API_KEY` take priority. Browser login uses S256 PKCE, random state, and a five-minute ephemeral loopback callback; failure or cancellation never saves a key. Keys are validated with `get_account` and saved with mode `0600`.
 
 ## Discover incrementally
 
@@ -54,7 +54,9 @@ Upload local source images with `aims upload ./photo.png --print url`. MCP `uplo
 
 ## MCP
 
-Stdio server: `aims-mcp`. Register with `AIMS_API_KEY` (or a prior `aims login --key`).
+Prefer the hosted HTTP server: **https://app.ai-media-studio.com/mcp**. The plugin and project `.mcp.json` use it without key environment variables. An OAuth-capable client handles browser approval. Approval requires a workspace **owner/admin**; every CLI/MCP connection is an ordinary workspace API key revocable under **Workspace Settings → API** (API Keys), sharing workspace credits and scopes. Logout removes only the local saved key, not server access.
+
+Optional local stdio server: `npx -y @ai-media-studio/mcp` (`aims-mcp` when installed). Register with `AIMS_API_KEY` or a prior browser/manual `aims login`. Claude-style config uses `mcpServers`; VS Code's `.vscode/mcp.json` uses `servers` instead. See `packages/mcp/README.md` for separate examples.
 
 Tools return JSON: `url`, `id`, `credits_used`, `credits_remaining`.
 

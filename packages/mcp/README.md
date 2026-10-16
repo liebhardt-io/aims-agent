@@ -2,31 +2,82 @@
 
 MCP server for [AI Media Studio (AIMS)](https://app.ai-media-studio.com). Generate and edit images and videos from Claude Code, Cursor, Codex, Claude Desktop, or any MCP client.
 
-The binary speaks MCP over **stdio**. It also has a non-interactive discovery path so agents can inspect it without starting the protocol:
+## Hosted MCP (recommended)
+
+Connect to **https://app.ai-media-studio.com/mcp** over HTTP. Your OAuth-capable client opens browser approval; no local Node process or `AIMS_API_KEY` environment variable is needed. A workspace **owner/admin** must approve the connection. Hosted MCP, CLI browser login, and manual keys all use ordinary workspace API keys sharing workspace credits and scopes. Revoke any connection under **Workspace Settings → API** (API Keys).
+
+### Claude Code
 
 ```bash
-aims-mcp --help
-aims-mcp --list-tools
+claude mcp add --transport http aims https://app.ai-media-studio.com/mcp
 ```
 
-## Install (Claude Code)
+Use `/mcp` to authenticate. Alternatively, install the Claude Code plugin (skills plus hosted MCP):
 
 ```bash
-claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
+claude plugin marketplace add liebhardt-io/aims-agent
+claude plugin install aims@aims
 ```
 
-Then restart Claude Code. Get an API key in AIMS → **Workspace Settings → API Keys**.
+### Claude Code `.mcp.json`
 
-If you already ran `aims login --key`, the server will also read `~/.aims/config.json`.
+```json
+{
+  "mcpServers": {
+    "aims": {
+      "type": "http",
+      "url": "https://app.ai-media-studio.com/mcp"
+    }
+  }
+}
+```
 
-## Manual config (`.mcp.json` / Claude Desktop / Cursor)
+Other OAuth-capable clients can add the same URL through their remote-server settings. Client configuration formats differ; do not assume Claude's JSON works everywhere.
+
+### VS Code `.vscode/mcp.json`
+
+VS Code uses **`servers`**, not `mcpServers`:
+
+```json
+{
+  "servers": {
+    "aims": {
+      "type": "http",
+      "url": "https://app.ai-media-studio.com/mcp"
+    }
+  }
+}
+```
+
+Start the server and follow the client's browser authentication prompt. Hosted credentials are stored by the client independently of CLI config.
+
+## Optional local stdio server
+
+For clients without hosted OAuth support, the npm binary speaks MCP over **stdio**. It also has a non-interactive discovery path so agents can inspect it without starting the protocol:
+
+```bash
+npx -y @ai-media-studio/mcp --help
+npx -y @ai-media-studio/mcp --list-tools
+```
+
+### Install (Claude Code, local stdio)
+
+```bash
+claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y @ai-media-studio/mcp
+```
+
+Then restart Claude Code. Create a manual API key in AIMS → **Workspace Settings → API** (API Keys).
+
+If you already ran CLI browser login (`aims login`) or `aims login --key`, the server also reads `~/.aims/config.json`; you may omit `-e` in that case. CLI non-TTY browser login requires `aims login --web`, `--no-browser` prints the URL without opening it, and `--paste` keeps the old interactive prompt. Local `aims logout` removes saved credentials only, not the server-side key.
+
+### Manual local config (Claude-style `mcpServers`)
 
 ```json
 {
   "mcpServers": {
     "aims": {
       "command": "npx",
-      "args": ["-y", "-p", "@ai-media-studio/mcp@latest", "aims-mcp"],
+      "args": ["-y", "@ai-media-studio/mcp"],
       "env": { "AIMS_API_KEY": "aims_xxx" }
     }
   }
@@ -54,9 +105,9 @@ For first/last-frame models, provide `first_frame_url` and `last_frame_url`. For
 
 Partial and total image failures return `isError: true` with the complete JSON result, including any completed images. Preserve those completed results and retry only the missing work. The server never retries paid generations automatically.
 
-## Environment
+## Environment (local stdio only)
 
-- `AIMS_API_KEY` (required unless `aims login --key` was used) — your `aims_` key.
+- `AIMS_API_KEY` (required unless CLI browser/manual login saved a key) — your `aims_` key.
 - `AIMS_BASE_URL` (optional) — defaults to `https://app.ai-media-studio.com/api/v1`. `AIMS_API_BASE_URL` is accepted as an alias.
 
 ## Try it

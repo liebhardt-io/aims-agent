@@ -1,24 +1,24 @@
 # aims-agent
 
-**Generate images and videos with AI agents.** `aims-agent` makes [AI Media Studio (AIMS)](https://app.ai-media-studio.com) available to Claude Code, Cursor, Codex, Claude Desktop, and any MCP or HTTP agent — through an **MCP server**, a **CLI**, and **Agent Skills**, all backed by the same API key.
+**Generate images and videos with AI agents.** `aims-agent` makes [AI Media Studio (AIMS)](https://app.ai-media-studio.com) available to Claude Code, Cursor, Codex, Claude Desktop, and any MCP or HTTP agent — through an **MCP server**, a **CLI**, and **Agent Skills**, all backed by workspace API keys.
 
 Website: [ai-media-studio.com](https://www.ai-media-studio.com) · Developer overview: [ai-media-studio.com/developers](https://www.ai-media-studio.com/developers) · Model prices: [ai-media-studio.com/ai-model-prices](https://www.ai-media-studio.com/ai-model-prices)
 
 > Turn a prompt into a finished image or video, right from your agent:
 > *"Make a 16:9 image of a red panda astronaut, then a 6-second video panning across it."*
 
-- 🧩 **MCP server** — `@ai-media-studio/mcp`, runnable with `npx`
+- 🧩 **MCP server** — hosted HTTP with browser approval, or local `@ai-media-studio/mcp` with `npx`
 - 🖥️ **CLI** — `@ai-media-studio/cli`, the `aims` command
 - 🛠️ **Skills** — drop-in Claude Code skills for generating & editing media
 - 🔌 **Plain HTTP** — it's just `POST /api/v1/...` with a Bearer token
 
-Everything authenticates with one `aims_` API key from **AIMS → Workspace Settings → API Keys**.
+Everything authenticates with ordinary workspace API keys. Browser login creates a key after an **owner/admin** approves the workspace connection; manual keys are still supported. Revoke any connection under **AIMS → Workspace Settings → API** (API Keys).
 
 ---
 
 ## Quick start
 
-Pick whichever fits your agent. They all use the same key and the same models.
+Pick whichever fits your agent. They all use the same workspace credits and models.
 
 ### 1. Skills (one-liner)
 
@@ -37,26 +37,26 @@ claude plugin marketplace add liebhardt-io/aims-agent
 claude plugin install aims@aims
 ```
 
-This installs the skills **and** registers the `aims` MCP server. Set `AIMS_API_KEY` in your environment first.
+This installs the skills **and** registers the hosted `aims` MCP server at `https://app.ai-media-studio.com/mcp`. Authenticate through your client's browser approval flow — no Node process or API-key environment variable is needed for the hosted connection. A workspace owner/admin must approve access.
 
 ### 3. MCP server
 
 ```bash
-claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
+claude mcp add --transport http aims https://app.ai-media-studio.com/mcp
 ```
 
-Restart Claude Code, then: *"Use aims to generate a video of waves at sunset."* See [`packages/mcp`](packages/mcp/README.md).
+Use `/mcp` in Claude Code to authenticate in your browser, then: *"Use aims to generate a video of waves at sunset."* See [`packages/mcp`](packages/mcp/README.md) for hosted configuration (including VS Code's distinct `servers` format) and the optional local stdio server, `npx -y @ai-media-studio/mcp`.
 
 ### 4. CLI
 
 ```bash
 npm install -g @ai-media-studio/cli
-aims login --key aims_xxx
+aims login
 aims image "a red panda astronaut, studio lighting" -a 16:9 --json
 aims video "drone shot over snowy mountains at sunrise" -d 6 --json
 ```
 
-See [`packages/cli`](packages/cli/README.md).
+Interactive login opens a browser for workspace approval. Use `aims login --web --no-browser` to explicitly start browser login without a terminal and open the printed URL yourself, `aims login --paste` for the old interactive key prompt, or `aims login --key aims_xxx` for automation. Explicit/global `--key` and `AIMS_API_KEY` take priority over browser login. See [`packages/cli`](packages/cli/README.md).
 
 ### 5. Plain HTTP
 
@@ -107,10 +107,10 @@ Upload local source images with `aims upload <file>` before editing or image-to-
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AIMS_API_KEY` | — | Your `aims_` key (required). |
+| `AIMS_API_KEY` | — | Your `aims_` key for CLI/local stdio (unless saved by login). Not needed for hosted MCP browser approval. |
 | `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL. `AIMS_API_BASE_URL` is accepted as an alias. |
 
-The CLI also persists the key at `~/.aims/config.json` (mode `600`) via `aims login --key`. Agents should always pass `--key` or `AIMS_API_KEY` — `aims login` only prompts when stdin is a TTY.
+The CLI persists a validated key at `~/.aims/config.json` (mode `600`) after browser or manual login. Without a key, `aims login` defaults to browser login only in an interactive terminal; non-TTY callers must opt in with `--web` or supply a key. Browser login uses a five-minute loopback callback and S256 PKCE, never prints the token, and saves nothing on cancellation or failure. Hosted MCP clients manage their own credential storage. All these connections are ordinary workspace API keys, sharing workspace credits and revocable under **Workspace Settings → API**. `aims logout` removes only the local saved key, not the server-side connection.
 
 See [AGENTS.md](AGENTS.md) for the agent-oriented CLI/MCP contract (`--json`, `--stdin`, `--dry-run`, `aims-mcp --list-tools`).
 

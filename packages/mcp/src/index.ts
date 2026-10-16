@@ -5,7 +5,7 @@
  * This binary speaks MCP over stdin/stdout. Use --help / --list-tools
  * for non-interactive discovery; do not run it as an interactive CLI.
  *
- *   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
+ *   claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y @ai-media-studio/mcp
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
@@ -30,7 +30,7 @@ Environment:
                    AIMS_API_BASE_URL is accepted as an alias)
 
 Examples:
-  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y -p @ai-media-studio/mcp@latest aims-mcp
+  claude mcp add aims -e AIMS_API_KEY=aims_xxx -- npx -y @ai-media-studio/mcp
   AIMS_API_KEY=aims_xxx aims-mcp --list-tools
   AIMS_API_KEY=aims_xxx aims-mcp
 `
