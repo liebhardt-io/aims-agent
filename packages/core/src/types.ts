@@ -35,7 +35,7 @@ export interface ImageUploadResult {
 export interface ImageGenerateParams {
   /** Required text description of the image. */
   prompt: string
-  /** Model id. Defaults server-side. Use `fal-ai/nano-banana-2` for a cheap, fast default. */
+  /** Model id. Defaults to fal-ai/nano-banana-pro server-side. Use `google/nano-banana-2.1` for cheap drafts. */
   model?: string
   /** Number of images to generate (1-8). Default 1. */
   n?: number
@@ -89,7 +89,7 @@ export interface ImageGenerateResult {
 export interface VideoGenerateParams {
   /** Required text description of the video. */
   prompt: string
-  /** Model id. Defaults to fal-ai/veo3.1/fast server-side. */
+  /** Model id. Defaults to fal-ai/kling-video/o3/pro/text-to-video server-side. */
   model?: string
   /** Requested duration in seconds. Snaps to the model's nearest supported value. */
   duration?: number | string
@@ -101,11 +101,11 @@ export interface VideoGenerateParams {
   image_url?: string
   /** Reference image URLs for reference-to-video models. */
   image_urls?: string[]
-  /** Start frame for first-last-frame video models. */
+  /** Start frame for Kling and FLUX 3 Max image-to-video models (same as image_url). */
   first_frame_url?: string
-  /** End frame for first-last-frame video models. */
+  /** End frame, with image_url, for Kling, Seedance 2.0 and FLUX 3 Max image-to-video models. */
   last_frame_url?: string
-  /** Source video URL for extend-video models. */
+  /** Source video URL for extend-video models. No current model extends videos. */
   extend_video_url?: string
   /** Classifier-free guidance scale (model dependent). */
   cfg_scale?: number

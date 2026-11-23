@@ -19,7 +19,7 @@ Example:
 > a flat vector logo of a mountain peak, minimal, two-tone teal and white, centered, on a transparent background
 
 Tips:
-- For crisp **text/typography** in an image, prefer `openai/gpt-image-2`.
+- For crisp **text/typography** in an image, prefer `openai/gpt-image-2.5/flare/text-to-image`.
 - Use `aspect_ratio` to control framing (`1:1` icons/logos, `16:9` banners, `9:16` phone wallpapers/social).
 - Generate `n: 2–4` variations when exploring a concept.
 - Use a fixed `seed` to reproduce or iterate on a specific result.

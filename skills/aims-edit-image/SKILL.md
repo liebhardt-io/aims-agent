@@ -14,8 +14,8 @@ Transform existing images with a text instruction. This uses the same image endp
 ## Inputs to gather
 
 - **prompt** (required): the edit instruction (what to change/add/remove/restyle).
-- **image_urls** (required): 1 to 10 workspace-hosted image URLs. Upload local files with MCP `upload_image`, CLI `aims upload <file>`, or HTTP `POST /uploads` first. Uploads require `media:write`; see [the upload contract](../../reference/api.md#post-uploads).
-- **model** (optional): defaults to an edit-capable model. Examples: `fal-ai/nano-banana-2`, `fal-ai/nano-banana-pro`, `fal-ai/flux-pro/kontext`, `openai/gpt-image-2`.
+- **image_urls** (required): 1 to 10 workspace-hosted image URLs. Upload local files with MCP `upload_image` (raw base64 contents), CLI `aims upload <file>`, or HTTP `POST /uploads` (multipart field `file`) first. Uploads require the `media:write` scope and accept raster images up to 20 MiB.
+- **model** (optional): omit it to edit with Nano Banana Pro (`fal-ai/nano-banana-pro`, 30 credits at 1K or 2K). Other choices: `google/nano-banana-2.1` (9 at 1K), `openai/gpt-image-2.6/flare/text-to-image` (7, 11 or 13 at low, medium or high quality), `meta/muse-image/text-to-image` (2), `blackforestlabs/flux-3/text-to-image` (10). The API switches each to its edit endpoint.
 - **aspect_ratio** (optional): defaults to `auto` to preserve the original proportions.
 - **n**, **seed**, **quality**, **style_slug**, **size** (optional): same meaning as for image generation; `n` (1-8) returns several edited variations.
 
@@ -34,7 +34,7 @@ curl -X POST https://app.ai-media-studio.com/api/v1/images/generate \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "turn this into a moody cinematic night scene with neon reflections",
-    "model": "fal-ai/nano-banana-2",
+    "model": "fal-ai/nano-banana-pro",
     "image_urls": ["WORKSPACE_URL_FROM_UPLOAD"],
     "aspect_ratio": "auto"
   }'

@@ -64,7 +64,7 @@ Interactive login opens a browser for workspace approval. Use `aims login --web 
 curl -X POST https://app.ai-media-studio.com/api/v1/images/generate \
   -H "Authorization: Bearer $AIMS_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{ "prompt": "a serene japanese garden in autumn", "model": "fal-ai/nano-banana-2", "aspect_ratio": "16:9" }'
+  -d '{ "prompt": "a serene japanese garden in autumn", "model": "fal-ai/nano-banana-pro", "aspect_ratio": "16:9" }'
 ```
 
 Full reference: [`reference/api.md`](reference/api.md).
@@ -93,11 +93,11 @@ aims-agent/
 | Upload source image | `upload_image` | `aims upload <file> --json` | `POST /uploads` |
 | Text-to-image | `generate_image` | `aims image --json` | `POST /images/generate` |
 | Image-to-image edit | `edit_image` | `aims edit --json` | `POST /images/generate` + `image_urls` |
-| Text/image/reference/frame/extended video | `generate_video` | `aims video --json` | `POST /videos/generate` |
+| Text/image/reference/start-and-end-frame video | `generate_video` | `aims video --json` | `POST /videos/generate` |
 | List models | `list_models` | `aims models --json` | `GET /models` |
 | Account & credits | `get_account` | `aims whoami --json` | `GET /images/generate` |
 
-> **Note:** Image-to-video and reference-to-video use dedicated model ids (e.g. `fal-ai/veo3.1/fast/image-to-video`). Pass `image_url` (or `image_urls`) together with that model id. Use `list_models` / `aims models` / `GET /models` to discover them.
+> **Note:** Image-to-video and reference-to-video use dedicated model ids (e.g. `fal-ai/kling-video/o3/pro/image-to-video`). Pass `image_url` (or `image_urls`) together with that model id. Use `list_models` / `aims models` / `GET /models` to discover them.
 
 Discover live models and pricing any time — see [`reference/models.md`](reference/models.md). Prompting tips in [`reference/prompting.md`](reference/prompting.md).
 

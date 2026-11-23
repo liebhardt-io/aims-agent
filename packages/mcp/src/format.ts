@@ -79,8 +79,8 @@ Workflow:
 5. Return the hosted url(s), credits_used, and credits_remaining to the user. On partial failure, preserve completed results and do not blindly retry the whole batch.
 
 Defaults:
-- Image: fal-ai/nano-banana-2 (cheap/fast). Use openai/gpt-image-2 for crisp text.
-- Video: fal-ai/veo3.1/fast. Video credits are per second — keep clips short.
+- Image: fal-ai/nano-banana-pro. Use openai/gpt-image-2.5/flare/text-to-image for crisp text and google/nano-banana-2.1 for cheap drafts.
+- Video: fal-ai/kling-video/o3/pro/text-to-video. Video credits are per second — keep clips short.
 - Image-to-video requires a model id ending in /image-to-video plus image_url.
 
 All tools return JSON (url, id, credits). Do not invent model ids; use list_models.`

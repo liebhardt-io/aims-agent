@@ -32,14 +32,13 @@ Generate one or more images. Provide `image_urls` to switch to image-to-image ed
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `prompt` | string | — | **Required.** Text description. |
-| `model` | string | workspace default | Model id, e.g. `fal-ai/nano-banana-2`. |
+| `model` | string | `fal-ai/nano-banana-pro` | Model id, e.g. `google/nano-banana-2.1`. See [models.md](models.md). |
 | `n` | integer | 1 | 1–8 images. |
 | `aspect_ratio` | string | model default | `auto`, `21:9`, `16:9`, `3:2`, `4:3`, `5:4`, `1:1`, `4:5`, `3:4`, `2:3`, `9:16`. Takes precedence over `size`. |
-| `size` | string | `1024x1024` | Pixel size for OpenAI models, e.g. `1536x1024`. |
+| `size` | string | `1024x1024` | Pixel size for GPT Image models, e.g. `1536x1024`. |
 | `resolution` | string | model default | `0.5K`, `1K`, `2K`, `4K` (model dependent). |
 | `output_format` | string | `png` | `png`, `jpeg`, `webp`. |
 | `quality` | string | model default | `low`, `medium`, `high`, `auto` (model dependent). |
-| `background` | string | `auto` | `auto`, `transparent`, `opaque` (GPT image models). |
 | `style_slug` | string | — | Style preset slug, e.g. `anime-style`. |
 | `image_urls` | string[] | none | 1 to 10 workspace-hosted image URLs for image editing. |
 | `seed` | integer | — | Deterministic output. |
@@ -54,8 +53,8 @@ Generate one or more images. Provide `image_urls` to switch to image-to-image ed
   "images": [
     { "id": "uuid", "url": "https://cdn.ai-media-studio.com/…/image.png", "status": "completed", "credits_refunded": 0 }
   ],
-  "credits_used": 25,
-  "credits_remaining": 9975,
+  "credits_used": 30,
+  "credits_remaining": 9970,
   "style_applied": "anime-style"
 }
 ```
@@ -73,14 +72,14 @@ Generate a video. Credits are charged **per second** of output.
 | Field | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `prompt` | string | — | **Required.** |
-| `model` | string | `fal-ai/veo3.1/fast` | Video model id. |
+| `model` | string | `fal-ai/kling-video/o3/pro/text-to-video` | Video model id. |
 | `duration` | integer | model default | Seconds; snapped to the nearest supported value. |
 | `aspect_ratio` | string | model default | e.g. `16:9`, `9:16`. |
 | `audio` | boolean | false | Enable audio when supported. |
 | `image_url` | string | — | Source image for image-to-video models. |
 | `image_urls` | string[] | — | Reference images for reference-to-video models. |
-| `first_frame_url` / `last_frame_url` | string | — | First-last-frame models. |
-| `extend_video_url` | string | — | Extend-video models. |
+| `first_frame_url` / `last_frame_url` | string | — | Start and end frame. Send the end frame with `image_url` to a Kling, Seedance 2.0 or FLUX 3 Max image-to-video model; `first_frame_url` also works as the start frame on Kling and FLUX 3 Max. |
+| `extend_video_url` | string | — | Extend-video models. No current model extends videos. |
 | `resolution` | string | — | When supported (e.g. `720p`, `1080p`). |
 | `negative_prompt` | string | — | When supported. |
 | `cfg_scale` | number | — | When supported. |
@@ -95,13 +94,13 @@ Generate a video. Credits are charged **per second** of output.
     "id": "uuid",
     "url": "https://v3.fal.media/files/…/output.mp4",
     "status": "completed",
-    "model": "fal-ai/veo3.1/fast",
+    "model": "fal-ai/kling-video/o3/pro/text-to-video",
     "duration": 6,
     "aspect_ratio": "16:9",
     "audio": false
   },
-  "credits_used": 180,
-  "credits_remaining": 9820
+  "credits_used": 102,
+  "credits_remaining": 9898
 }
 ```
 
@@ -118,7 +117,7 @@ Health check + model discovery. Returns:
   "credits_available": 9975,
   "scopes": ["image:generate", "video:generate", "media:read", "media:write"],
   "available_models": [
-    { "id": "fal-ai/nano-banana-2", "name": "Nano Banana 2", "model_type": "text2img", "credit_cost": 25 }
+    { "id": "fal-ai/nano-banana-pro", "name": "Nano Banana Pro", "model_type": "text2img", "credit_cost": 30 }
   ]
 }
 ```

@@ -45,7 +45,7 @@ Every `--help` includes copy-pasteable Examples.
 ```bash
 echo "a red panda astronaut" | aims image --stdin --json
 url=$(aims image "a red panda astronaut" --print url) &&
-  aims video "slow cinematic push-in" --model fal-ai/veo3.1/fast/image-to-video --image-url "$url" --duration 5 --json
+  aims video "slow cinematic push-in" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$url" --duration 5 --json
 ```
 
 Image failures, including partial batches, exit 1 after printing results. Keep completed images and retry only missing work. Download errors retain the generated URLs; download those URLs again instead of regenerating.
@@ -65,9 +65,9 @@ Tools return JSON: `url`, `id`, `credits_used`, `credits_remaining`.
 3. `upload_image` for local source images, then `generate_image` / `edit_image` / `generate_video`.
 4. Return hosted URLs and credit usage to the user.
 
-Defaults: `fal-ai/nano-banana-2` (images), `fal-ai/veo3.1/fast` (video). Video credits are per second.
+Defaults when no model is given: `fal-ai/nano-banana-pro` (images), `fal-ai/kling-video/o3/pro/text-to-video` (video). Video credits are per second. Current models and prices: `reference/models.md`.
 
-For first/last-frame video models, pass `first_frame_url` and `last_frame_url`. For extension models, pass `extend_video_url`. CLI flags use hyphens; repeated `--image-urls` flags supply reference images. MCP returns `isError: true` on partial or total image failures, retaining per-image results.
+For a start and end frame, pass `image_url` and `last_frame_url` to a Kling, Seedance 2.0 or FLUX 3 Max image-to-video model. No current model extends videos. CLI flags use hyphens; repeated `--image-urls` flags supply reference images. MCP returns `isError: true` on partial or total image failures, retaining per-image results.
 
 ## Idempotency and cost
 

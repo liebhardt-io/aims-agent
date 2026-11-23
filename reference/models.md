@@ -6,44 +6,51 @@ Model availability and pricing change over time. **Always discover the live list
 - CLI: `aims models` (or `aims models --type image|video`)
 - HTTP: `GET /api/v1/models`, or `GET /api/v1/images/generate` / `GET /api/v1/videos/generate`
 
-Credit costs below are a snapshot for orientation. **Image models are priced per image; video models are priced per second.**
+Discovery returns each model's base `credit_cost`. The prices below are a snapshot of AI Media Studio's lineup on 23 November 2026, for orientation. **Image models are priced per image; video models are priced per second.**
+
+## Defaults
+
+When a request names no `model`, the API uses:
+
+- Images: `fal-ai/nano-banana-pro` (Nano Banana Pro). With `image_urls`, its edit endpoint.
+- Video: `fal-ai/kling-video/o3/pro/text-to-video` (Kling O3 Pro).
 
 ## Image models (credits per image)
 
 | Model id | Name | Credits |
 | --- | --- | --- |
-| `fal-ai/bytedance/seedream/v4/text-to-image` | Seedream V4 | 10 |
-| `fal-ai/nano-banana-2` | Nano Banana 2 | 25 |
-| `fal-ai/gpt-image-1.5` | GPT Image 1.5 | 30 |
-| `fal-ai/nano-banana-pro` | Nano Banana Pro | 50 |
-| `openai/gpt-image-2` | GPT Image 2 | 70 |
+| `fal-ai/nano-banana-pro` | Nano Banana Pro (default) | 30 at 1K or 2K, 60 at 4K |
+| `google/nano-banana-2.1` | Nano Banana 2.1 | 8 / 12 / 27 at 1K / 2K / 4K (edits 9 / 14 / 31) |
+| `openai/gpt-image-2.5/flare/text-to-image` | GPT Image 2.5 Flare | 2 / 3 / 11 at low / medium / high quality (edits 3 / 5 / 13) |
+| `openai/gpt-image-2.6/flare/text-to-image` | GPT Image 2.6 Flare | 5 / 9 / 15 at low / medium / high quality (edits 7 / 11 / 13) |
+| `meta/muse-image/text-to-image` | Muse Image | 2 |
+| `blackforestlabs/flux-3/text-to-image` | FLUX 3 Image | 10 (about 1 MP) |
 
-Image editing (image-to-image) variants exist too, e.g. `fal-ai/nano-banana-2/edit`, `fal-ai/flux-pro/kontext`, `openai/gpt-image-2/edit`, `fal-ai/bytedance/seedream/v4/edit`. You usually don't need to pick an edit model explicitly — passing `image_urls` routes to the edit path automatically.
+- GPT Image 2.5 and 2.6 also come as `…/sunburst/text-to-image`, a more detailed variant at the same price. Their prices are for outputs up to about 2.4 MP; larger sizes cost more.
+- Every image model also edits. Passing `image_urls` routes to the model's edit endpoint (for example `fal-ai/nano-banana-pro/edit`, `openai/gpt-image-2.6/flare/edit`), so you rarely need to name an edit id.
 
 ## Video models (credits per second)
 
-| Model id | Name | Credits/s |
-| --- | --- | --- |
-| `fal-ai/veo3.1/lite` | Veo 3.1 Lite | 15 |
-| `xai/grok-imagine-video/text-to-video` | Grok Imagine | 15 |
-| `bytedance/seedance-2.0/fast/text-to-video` | Seedance 2.0 Fast | 20 |
-| `bytedance/seedance-2.0/text-to-video` | Seedance 2.0 | 25 |
-| `fal-ai/veo3.1/fast` | Veo 3.1 Fast | 30 |
-| `fal-ai/sora-2/text-to-video` | Sora 2 | 35 |
-| `fal-ai/sora-2/text-to-video/pro` | Sora 2 Pro | 50 |
-| `fal-ai/kling-video/v3/standard/text-to-video` | Kling v3 Standard | 67 |
-| `fal-ai/kling-video/v3/pro/text-to-video` | Kling v3 Pro | 70 |
+| Model id | Name | Credits per second | Length |
+| --- | --- | --- | --- |
+| `fal-ai/kling-video/o3/pro/text-to-video` | Kling O3 Pro (default) | 17, or 21 with `audio: true` | 3 to 15 s |
+| `fal-ai/kling-video/v3/pro/text-to-video` | Kling v3 Pro | 17, or 25 with `audio: true` | 3 to 15 s |
+| `kling/v4/text-to-video` | Kling 4.0 | 23 at 720p, 34 at 1080p; sound always included | 3 to 15 s |
+| `bytedance/seedance-2.0/text-to-video` | Seedance 2.0 | 21 / 44 / 99 at 480p / 720p / 1080p | 4 to 15 s |
+| `xai/grok-imagine-video/v1.5/text-to-video` | Grok Imagine Video 1.5 | 12 / 21 / 36 at 480p / 720p / 1080p; sound always included | 1 to 15 s |
+| `blackforestlabs/flux-3-max/text-to-video` | FLUX 3 Max | 25 / 42 / 58 / 115 at 720p / 1080p / 2K / 4K | 5 to 20 s |
 
-For **image-to-video**, use an `…/image-to-video` model id and pass `image_url`, e.g. `fal-ai/veo3.1/fast/image-to-video`, `bytedance/seedance-2.0/fast/image-to-video`, `fal-ai/kling-video/v3/standard/image-to-video`.
-
-For **reference-to-video** use `…/reference-to-video` with `image_urls`.
+- **Image-to-video:** replace `/text-to-video` with `/image-to-video` in any id above and pass `image_url`.
+- **Start and end frames:** pass the start frame as `image_url` and the end frame as `last_frame_url` to the image-to-video id of Kling O3 Pro, Kling v3 Pro, Kling 4.0, Seedance 2.0 or FLUX 3 Max.
+- **Reference-to-video:** `fal-ai/kling-video/o3/pro/reference-to-video` or `bytedance/seedance-2.0/reference-to-video` with `image_urls`.
+- No current model extends an existing video.
 
 ## Choosing a model
 
-- **Cheapest image:** Seedream V4. **Best default image:** Nano Banana 2. **Best text rendering:** GPT Image 2.
-- **Best default video:** Veo 3.1 Fast. **Cheapest video:** Veo 3.1 Lite / Grok Imagine. **Premium:** Kling v3 / Sora 2 Pro.
+- **Images:** Nano Banana Pro for realistic photos and final images, Nano Banana 2.1 for cheap drafts, GPT Image 2.5 Flare for readable text (posters, labels, menus), Muse Image for the lowest price.
+- **Video:** Kling O3 Pro as the all-rounder, Grok Imagine Video 1.5 for the lowest price, Seedance 2.0 or FLUX 3 Max for top quality, Kling 4.0 when every clip should have sound.
 
 ## Estimating cost
 
-- Image: `credits = credit_cost × n`.
-- Video: `credits ≈ credit_cost × duration_seconds` (audio and resolution can add a multiplier on some models).
+- Image: per-image credits × `n`. Nano Banana prices rise with `resolution`; GPT Image prices depend on `quality` and size.
+- Video: credits per second × duration, rounded up. Resolution and, on the Kling O3 and v3 models, `audio` change the per-second rate.

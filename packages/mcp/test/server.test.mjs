@@ -69,7 +69,7 @@ test("video tools forward every video source field and flag incomplete videos", 
   for (const field of ["image_url", "image_urls", "first_frame_url", "last_frame_url", "extend_video_url"]) assert.ok(field in inputs)
   const args = {
     prompt: "test",
-    model: "fal-ai/veo3.1/fast/first-last-frame-to-video",
+    model: "fal-ai/kling-video/o3/pro/image-to-video",
     first_frame_url: "https://example.test/start.png",
     last_frame_url: "https://example.test/end.png",
     extend_video_url: "https://example.test/source.mp4",

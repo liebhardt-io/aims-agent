@@ -34,7 +34,7 @@ aims models --type image --json
 aims config path
 
 # Images
-aims image "a red panda astronaut, studio lighting" -m fal-ai/nano-banana-2 -a 16:9 --json
+aims image "a red panda astronaut, studio lighting" -m fal-ai/nano-banana-pro -a 16:9 --json
 aims image "logo of a mountain, flat vector" -a 1:1 --output ./out
 echo "a red panda astronaut" | aims image --stdin --json
 
@@ -43,11 +43,11 @@ source_url=$(aims upload ./photo.jpg --print url) &&
   aims edit "make it a night scene with neon" --image-url "$source_url" --json
 
 # Videos (credits are per second)
-aims video "drone shot over snowy mountains at sunrise" -m fal-ai/veo3.1/fast -d 6 --json
+aims video "drone shot over snowy mountains at sunrise" -m fal-ai/kling-video/o3/pro/text-to-video -d 6 --json
 
-# First/last frames, using URLs uploaded to this workspace
-aims video "transition between scenes" -m fal-ai/veo3.1/fast/first-last-frame-to-video \
-  --first-frame-url "$START_URL" --last-frame-url "$END_URL" --json
+# Start and end frames, using URLs uploaded to this workspace
+aims video "transition between scenes" -m fal-ai/kling-video/o3/pro/image-to-video \
+  --image-url "$START_URL" --last-frame-url "$END_URL" --json
 
 # Preview without spending credits
 aims image "a red panda astronaut" --dry-run --json
@@ -67,7 +67,7 @@ Run `aims --help` or `aims <command> --help` for examples.
 
 `aims upload <file>` accepts PNG, JPEG, WebP, GIF, AVIF, HEIC, and BMP files up to 20 MiB and requires `media:write`. Use the returned workspace URL as an image reference. Arbitrary external image URLs are not accepted.
 
-For reference-to-video models, repeat `--image-urls <url>` for each reference. First/last-frame models require `--first-frame-url` and `--last-frame-url`. Extension models use `--extend-video-url` with a video previously generated in the same workspace.
+Without `--model`, images use `fal-ai/nano-banana-pro` and videos `fal-ai/kling-video/o3/pro/text-to-video`. For reference-to-video models, repeat `--image-urls <url>` for each reference. For a start and end frame, pass `--image-url` and `--last-frame-url` to a Kling, Seedance 2.0 or FLUX 3 Max image-to-video model. No current model extends videos.
 
 ## Agent notes
 
@@ -76,7 +76,7 @@ For reference-to-video models, repeat `--image-urls <url>` for each reference. F
 - Partial and total image failures exit `1` after printing the result. JSON retains per-image errors and completed URLs; `--print url` retains completed URLs. Check the exit code before chaining another generation.
 - Download failures exit `1` while preserving the generation result, `saved` paths, and `download_errors` in JSON. Retry the download using its URL instead of regenerating paid media.
 - `aims login --key` is idempotent. Generation is not — use `--dry-run` first if unsure.
-- Chain successful results with `--print url`: `url=$(aims image "mountains" --print url) && aims video "pan across" --model fal-ai/veo3.1/fast/image-to-video --image-url "$url" --json`
+- Chain successful results with `--print url`: `url=$(aims image "mountains" --print url) && aims video "pan across" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$url" --json`
 
 ## Prefer MCP?
 

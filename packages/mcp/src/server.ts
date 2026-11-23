@@ -59,7 +59,7 @@ export function createAimsServer(): McpServer {
       description:
         "Generate one or more images from a text prompt using AI Media Studio (AIMS). " +
         "Returns JSON with hosted image URL(s). Provide image_urls for image-to-image editing. " +
-        "Each generation spends workspace credits. Default model: fal-ai/nano-banana-2.",
+        "Each generation spends workspace credits. Default model: fal-ai/nano-banana-pro.",
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -72,7 +72,7 @@ export function createAimsServer(): McpServer {
           .string()
           .optional()
           .describe(
-            "Model id. Recommended cheap default: 'fal-ai/nano-banana-2'. Use list_models to discover live ids.",
+            "Model id. Default 'fal-ai/nano-banana-pro'. Use list_models to discover live ids.",
           ),
         n: z.number().int().min(1).max(8).optional().describe("Number of images (1-8). Default 1."),
         aspect_ratio: z
@@ -161,7 +161,7 @@ export function createAimsServer(): McpServer {
       description:
         "Generate a video from a text prompt using AI Media Studio (AIMS). " +
         "Supports image-to-video (image_url), reference-to-video (image_urls), " +
-        "first/last frames (first_frame_url and last_frame_url), and extension (extend_video_url). " +
+        "and start and end frames (image_url and last_frame_url). " +
         "Returns JSON with the hosted MP4 URL. Credits are per second; keep clips short.",
       annotations: {
         readOnlyHint: false,
@@ -175,21 +175,21 @@ export function createAimsServer(): McpServer {
           .string()
           .optional()
           .describe(
-            "Model id. Default 'fal-ai/veo3.1/fast'. For image-to-video use an id ending in /image-to-video. Use list_models to discover.",
+            "Model id. Default 'fal-ai/kling-video/o3/pro/text-to-video'. For image-to-video use an id ending in /image-to-video. Use list_models to discover.",
           ),
         duration: z
           .union([z.number(), z.string()])
           .optional()
           .describe("Requested duration in seconds; snaps to the model's nearest supported value."),
         aspect_ratio: z.string().optional().describe("e.g. 16:9 or 9:16."),
-        audio: z.boolean().optional().describe("Enable audio when the model supports it."),
+        audio: z.boolean().optional().describe("Enable audio when the model supports it. Kling 4.0 and Grok Imagine clips always have sound."),
         image_url: z.string().url().optional().describe("Workspace-hosted source image for image-to-video. Upload local files with upload_image first."),
         image_urls: z
           .array(z.string().url())
           .optional()
           .describe("Reference images for reference-to-video models."),
-        first_frame_url: z.string().url().optional().describe("Start frame for first-last-frame-to-video models."),
-        last_frame_url: z.string().url().optional().describe("End frame for first-last-frame-to-video models or optional end-frame guidance."),
+        first_frame_url: z.string().url().optional().describe("Start frame for Kling and FLUX 3 Max image-to-video models; image_url works on every image-to-video model."),
+        last_frame_url: z.string().url().optional().describe("End frame, with image_url, on Kling, Seedance 2.0 and FLUX 3 Max image-to-video models."),
         extend_video_url: z.string().url().optional().describe("Source video URL for extend-video models."),
         resolution: z.string().optional().describe("Resolution when supported (e.g. 720p, 1080p)."),
         negative_prompt: z.string().optional().describe("Negative prompt when supported."),

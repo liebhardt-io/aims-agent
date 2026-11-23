@@ -397,7 +397,7 @@ function printDryRun(g: GlobalOpts, path: string, body: ImageGenerateParams | Vi
 /** Options shared by `image` and `edit`; both call POST /images/generate. */
 function imageOptions(command: Command, aspectRatioHelp: string): Command {
   return command
-    .option("-m, --model <model>", "model id (e.g. fal-ai/nano-banana-2)")
+    .option("-m, --model <model>", "model id (default fal-ai/nano-banana-pro)")
     .option("-n, --n <count>", "number of images (1-8)", parseIntOption)
     .option("-a, --aspect-ratio <ratio>", aspectRatioHelp)
     .option("-r, --resolution <res>", "0.5K, 1K, 2K, 4K")
@@ -491,7 +491,7 @@ imageOptions(
     `
 Examples:
   aims image "a red panda astronaut, studio lighting" --aspect-ratio 16:9 --json
-  aims image "logo of a mountain, flat vector" --model fal-ai/nano-banana-2 --aspect-ratio 1:1 --output ./out
+  aims image "logo of a mountain, flat vector" --model google/nano-banana-2.1 --aspect-ratio 1:1 --output ./out
   echo "a red panda astronaut" | aims image --stdin --json
   aims image "a red panda astronaut" --dry-run --json
   aims image "a red panda astronaut" --print url
@@ -535,14 +535,14 @@ program
   .command("video")
   .description("Generate a video from a text prompt")
   .argument("[prompt...]", "video description (or pass --stdin / pipe)")
-  .option("-m, --model <model>", "model id (e.g. fal-ai/veo3.1/fast)")
+  .option("-m, --model <model>", "model id (default fal-ai/kling-video/o3/pro/text-to-video)")
   .option("-d, --duration <seconds>", "requested duration in seconds", parseIntOption)
   .option("-a, --aspect-ratio <ratio>", "e.g. 16:9, 9:16")
   .option("--audio", "enable audio when supported", false)
   .option("-i, --image-url <url>", "source image for image-to-video")
   .option("--image-urls <url>", "reference image URL for reference-to-video (repeatable)", collect, [])
-  .option("--first-frame-url <url>", "start frame for first-last-frame-to-video")
-  .option("--last-frame-url <url>", "end frame for first-last-frame-to-video or optional end-frame guidance")
+  .option("--first-frame-url <url>", "start frame for Kling and FLUX 3 Max image-to-video (same as --image-url)")
+  .option("--last-frame-url <url>", "end frame, with --image-url, for Kling, Seedance 2.0 and FLUX 3 Max image-to-video")
   .option("--extend-video-url <url>", "source video URL for extend-video")
   .option("-r, --resolution <res>", "e.g. 720p, 1080p")
   .option("--negative-prompt <text>", "negative prompt when supported")
@@ -555,8 +555,8 @@ program
     `
 Examples:
   aims video "drone shot over snowy mountains at sunrise" --duration 6 --json
-  aims video "slow cinematic push-in" --model fal-ai/veo3.1/fast/image-to-video --image-url "$SOURCE_URL" --duration 5
-  aims video "transition between frames" --model fal-ai/veo3.1/fast/first-last-frame-to-video --first-frame-url "$START_URL" --last-frame-url "$END_URL" --json
+  aims video "slow cinematic push-in" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$SOURCE_URL" --duration 5
+  aims video "transition between frames" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$START_URL" --last-frame-url "$END_URL" --json
   echo "waves at sunset" | aims video --stdin --duration 6 --print url
   aims video "waves at sunset" --duration 6 --dry-run --json
 `,
