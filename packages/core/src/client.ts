@@ -4,26 +4,41 @@ import type {
   ImageGenerateParams,
   ImageGenerateResult,
   ImageUploadResult,
+  MediaStatusResult,
   ModelsResult,
   VideoGenerateParams,
   VideoGenerateResult,
 } from "./types.js"
-import { resolveBaseUrl } from "./config.js"
+import { assertSecureBaseUrl, resolveBaseUrl } from "./config.js"
 import { MAX_IMAGE_UPLOAD_BYTES } from "./files.js"
 
-/** Error thrown when the AIMS API returns a non-2xx response or the request fails. */
+/**
+ * Error thrown when the AIMS API returns a non-2xx response or the request fails.
+ * `status` is 0 when no HTTP response arrived (network failure or timeout).
+ */
 export class AimsApiError extends Error {
   status: number
   body: unknown
-  constructor(message: string, status: number, body?: unknown) {
+  /** Machine-readable reason from the response body, such as PAID_PLAN_REQUIRED, or CLIENT_TIMEOUT. */
+  code?: string
+  constructor(message: string, status: number, body?: unknown, code?: string) {
     super(message)
     this.name = "AimsApiError"
     this.status = status
     this.body = body
+    const bodyCode = body && typeof body === "object" ? (body as Record<string, unknown>).code : undefined
+    this.code = code ?? (typeof bodyCode === "string" ? bodyCode : undefined)
+  }
+
+  /** The server accepted the generation and it is still running; it is charged if it completes. */
+  get stillGenerating(): boolean {
+    return Boolean(this.body && typeof this.body === "object" && (this.body as Record<string, unknown>).status === "generating")
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 600_000
+// Generation routes may run for up to 600 s on the server; wait a little longer
+// so a slow but successful generation is not abandoned (and paid for twice).
+const DEFAULT_TIMEOUT_MS = 660_000
 
 function errorMessageFromBody(body: unknown, status: number): string {
   if (body && typeof body === "object") {
@@ -52,6 +67,7 @@ export class AimsClient {
     }
     this.apiKey = options.apiKey
     this.baseUrl = resolveBaseUrl(options.baseUrl)
+    assertSecureBaseUrl(this.baseUrl)
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const f = options.fetch ?? globalThis.fetch
     if (!f) {
@@ -94,7 +110,12 @@ export class AimsClient {
       return json as T
     } catch (err) {
       if (controller.signal.aborted) {
-        throw new AimsApiError(`Request timed out after ${this.timeoutMs} ms`, 408)
+        throw new AimsApiError(
+          `No response within ${Math.round(this.timeoutMs / 1000)} s. A generation may still complete and be charged.`,
+          0,
+          undefined,
+          "CLIENT_TIMEOUT",
+        )
       }
       if (err instanceof AimsApiError) throw err
       // Report only the path (not the host) to avoid leaking infra topology
@@ -135,6 +156,17 @@ export class AimsClient {
   generateVideo(params: VideoGenerateParams): Promise<VideoGenerateResult> {
     if (!params.prompt?.trim()) throw new Error("`prompt` is required")
     return this.request<VideoGenerateResult>("POST", "/videos/generate", params)
+  }
+
+  /** Status and URL of one generation in this workspace. Requires the media:read scope. */
+  getMedia(id: string): Promise<MediaStatusResult> {
+    if (!id?.trim()) throw new Error("`id` is required")
+    return this.request<MediaStatusResult>("GET", `/media/${encodeURIComponent(id.trim())}`)
+  }
+
+  /** Revoke the API key this client authenticates with. */
+  revokeCurrentKey(): Promise<{ success: boolean; revoked: boolean }> {
+    return this.request("DELETE", "/keys/current")
   }
 
   /** Account status: workspace id, available credits, scopes, and available image models. */

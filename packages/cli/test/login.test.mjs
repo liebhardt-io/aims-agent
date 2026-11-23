@@ -106,8 +106,11 @@ test("browser login registers a public client, uses S256 PKCE, validates the key
   })
   assert.equal(output.code, 0, output.stderr)
   assert.equal(seen.discovery, 1)
+  // The name identifies this machine and day under Workspace Settings → API Keys.
+  assert.match(seen.registration.client_name, /^AIMS CLI on \S+ \(\d{4}-\d{2}-\d{2}\)$/)
+  assert.ok(seen.registration.client_name.length <= 80)
   assert.deepEqual(seen.registration, {
-    client_name: "AIMS CLI", redirect_uris: [authorization.searchParams.get("redirect_uri")],
+    client_name: seen.registration.client_name, redirect_uris: [authorization.searchParams.get("redirect_uri")],
     grant_types: ["authorization_code"], response_types: ["code"], token_endpoint_auth_method: "none",
   })
   assert.equal(authorization.searchParams.get("response_type"), "code")
@@ -164,6 +167,8 @@ for (const scenario of ["wrong state", "denied", "missing code", "exchange failu
     assert.equal(seen.accounts, scenario === "validation failure" ? 1 : 0)
     assert.ok(!output.stderr.includes(key))
     assert.match(output.stderr, ["timeout", "stalled exchange"].includes(scenario) ? /timed out after 5 minutes/ : /state mismatch|denied|missing|HTTP 400|401|cancelled|Invalid OAuth JSON/)
+    // Only a key that was created but failed its check is left for the user to revoke.
+    assert.equal(/created the API key "AIMS CLI on .+ \(connected app\)".*\n.*Revoke it/.test(output.stderr), scenario === "validation failure")
     await assertClosed(redirectUri)
   })
 }
@@ -190,19 +195,39 @@ test("non-TTY no-key login refuses implicit browser login and paste without touc
   assert.equal(seen.discovery, 0)
 })
 
-test("explicit login key, global key and environment key take priority over browser login", async (t) => {
+test("explicit login key, global key and environment key are saved without browser login", async (t) => {
   const home = await temporaryHome(t)
   const { origin, seen } = await fixture(t)
   const env = { ...noKeyEnv(home, origin), AIMS_API_KEY: "aims_env" }
   for (const [args, expected] of [
-    [["--key", "aims_global", "login", "--key", "aims_local", "--web"], "aims_local"],
-    [["--key", "aims_global", "login", "--web"], "aims_global"],
-    [["login", "--web"], "aims_env"],
+    [["--key", "aims_global", "login", "--key", "aims_local"], "aims_local"],
+    [["--key", "aims_global", "login"], "aims_global"],
+    [["login"], "aims_env"],
   ]) {
     const output = await runCli(args, env)
     assert.equal(output.code, 0, output.stderr)
     assert.equal(seen.authorization, `Bearer ${expected}`)
-    assert.equal(JSON.parse(await readFile(join(home, ".aims/config.json"), "utf8")).apiKey, expected)
+    const saved = JSON.parse(await readFile(join(home, ".aims/config.json"), "utf8"))
+    assert.equal(saved.apiKey, expected)
+    // The key was checked against this base URL, so later calls must use it too.
+    assert.equal(saved.baseUrl, `${origin}/api/v1`)
   }
   assert.equal(seen.discovery, 0)
+})
+
+test("--web starts browser login even when AIMS_API_KEY is set, and refuses an explicit key", async (t) => {
+  const home = await temporaryHome(t)
+  const { origin, seen } = await fixture(t)
+  const env = { ...noKeyEnv(home, origin), AIMS_API_KEY: "aims_env" }
+  const output = await webCli(t, env, async (url) => assert.equal(await callback(url), 200))
+  assert.equal(output.code, 0, output.stderr)
+  assert.equal(seen.discovery, 1)
+  assert.equal(seen.authorization, `Bearer ${key}`)
+  assert.equal(JSON.parse(await readFile(join(home, ".aims/config.json"), "utf8")).apiKey, key)
+  for (const args of [["login", "--key", "aims_local", "--web"], ["--key", "aims_global", "login", "--paste"]]) {
+    const refused = await runCli(args, env)
+    assert.equal(refused.code, 2)
+    assert.match(refused.stderr, /either --key or --web\/--paste/)
+  }
+  assert.equal(seen.discovery, 1)
 })

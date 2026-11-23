@@ -18,8 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 18 is the declared engines minimum; 22 is the current LTS.
-        node: [18, 22]
+        # 20 is the declared engines minimum; 22 is the current LTS.
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4 # reads packageManager

@@ -18,9 +18,12 @@ export function usage(message: string): never {
 
 export function handleError(err: unknown): never {
   if (err instanceof AimsApiError) {
-    const hint = apiErrorHint(err.status)
+    const body = err.body && typeof err.body === "object" ? (err.body as Record<string, unknown>) : {}
+    const mediaId = typeof body.media_id === "string" ? `\nmedia_id: ${body.media_id}` : ""
+    const hint = apiErrorHint(err)
     const suffix = hint ? `\n${hint}` : ""
-    die(`AIMS API error (${err.status}): ${err.message}${suffix}`)
+    const label = err.status ? `AIMS API error (${err.status}${err.code ? ` ${err.code}` : ""})` : "AIMS API error"
+    die(`${label}: ${err.message}${mediaId}${suffix}`)
   }
   die(`Error: ${(err as Error)?.message ?? String(err)}`)
 }

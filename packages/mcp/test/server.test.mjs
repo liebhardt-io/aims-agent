@@ -6,11 +6,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { body, completedImage, environment, failedImage, imageBatch, json, png, serve, temporaryHome, videoResult } from "../../../test/support.mjs"
 
-async function connect(t, home, baseUrl) {
+async function connect(t, home, baseUrl, extraEnv = {}) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [new URL("../dist/index.js", import.meta.url).pathname],
-    env: environment(home, baseUrl),
+    env: { ...environment(home, baseUrl), ...extraEnv },
     stderr: "pipe",
   })
   const client = new Client({ name: "aims-test", version: "1" })
@@ -125,4 +125,82 @@ test("upload_image accepts no file paths and rejects nonimages before HTTP", asy
     assert.equal(result.isError, true)
   }
   assert.equal(requests, 0)
+})
+
+test("a generation still running keeps its id and says not to generate it again", async (t) => {
+  const home = await temporaryHome(t)
+  let reply
+  const baseUrl = await serve(t, (_request, response) => json(response, ...reply))
+  const client = await connect(t, home, baseUrl)
+  const pending = { id: "pending-image", url: null, status: "generating", credits_refunded: 0 }
+  reply = [imageBatch([completedImage, pending]), 202]
+  const images = await client.callTool({ name: "generate_image", arguments: { prompt: "test", n: 2 } })
+  assert.equal(images.isError, true)
+  assert.deepEqual(images.structuredContent.images, [completedImage, pending])
+  assert.match(images.structuredContent.hint, /Do not generate it again/)
+  reply = [{ error: "Video generation is awaiting recovery", media_id: "m-1", status: "generating" }, 503]
+  const video = JSON.parse((await client.callTool({ name: "generate_video", arguments: { prompt: "test" } })).content[0].text)
+  assert.equal(video.media_id, "m-1")
+  assert.equal(video.status, "generating")
+  assert.match(video.error, /awaiting recovery/)
+  assert.doesNotMatch(video.error, /try again/i)
+  reply = [{ error: "An unexpected error occurred during video generation" }, 500]
+  const outage = JSON.parse((await client.callTool({ name: "generate_video", arguments: { prompt: "test" } })).content[0].text)
+  assert.match(outage.error, /try again/)
+})
+
+test("402 without a paid plan points to billing, not to the balance", async (t) => {
+  const home = await temporaryHome(t)
+  const baseUrl = await serve(t, (_request, response) => json(response, { error: "Plans start at $19/month.", code: "PAID_PLAN_REQUIRED" }, 402))
+  const client = await connect(t, home, baseUrl)
+  const result = await client.callTool({ name: "generate_image", arguments: { prompt: "test" } })
+  const payload = JSON.parse(result.content[0].text)
+  assert.equal(result.isError, true)
+  assert.equal(payload.code, "PAID_PLAN_REQUIRED")
+  assert.match(payload.hint, /paid plan, even with credits left/)
+  assert.equal(payload.next, undefined)
+})
+
+test("get_media reads one generation by id; generations report progress and honor the credit cap", async (t) => {
+  const home = await temporaryHome(t)
+  const requests = []
+  const id = "3f0c2a8e-1b7d-4c55-9f0e-6a1b2c3d4e5f"
+  const media = { id, type: "image_generation", status: "completed", url: completedImage.url, created_at: "t0", updated_at: "t1" }
+  const baseUrl = await serve(t, async (request, response) => {
+    const sent = request.method === "POST" ? JSON.parse(await body(request)) : undefined
+    requests.push([request.method, request.url, sent?.max_credits, sent?.aspect_ratio])
+    if (request.url.startsWith("/media/")) return json(response, { success: true, media })
+    setTimeout(() => json(response, imageBatch([completedImage])), 300)
+  })
+  const client = await connect(t, home, baseUrl, { AIMS_MAX_CREDITS: "50" })
+  const found = await client.callTool({ name: "get_media", arguments: { id } })
+  assert.equal(found.isError, undefined)
+  assert.deepEqual(found.structuredContent, { success: true, media })
+  const invalid = await client.callTool({ name: "get_media", arguments: { id: "../keys/current" } })
+  assert.equal(invalid.isError, true)
+  const progress = []
+  const edited = await client.callTool(
+    { name: "edit_image", arguments: { prompt: "test", image_urls: [completedImage.url] } },
+    undefined,
+    { onprogress: (update) => progress.push(update) },
+  )
+  assert.equal(edited.isError, undefined)
+  assert.ok(progress.length >= 1)
+  assert.match(progress[0].message, /Editing image/)
+  await client.callTool({ name: "generate_image", arguments: { prompt: "test", max_credits: 20 } })
+  assert.deepEqual(requests, [
+    ["GET", `/media/${id}`, undefined, undefined],
+    ["POST", "/images/generate", 50, "auto"],
+    ["POST", "/images/generate", 20, undefined],
+  ])
+})
+
+test("model discovery accepts catalog rows without a label or price", async (t) => {
+  const home = await temporaryHome(t)
+  const model = { id: "fal-ai/nano-banana-pro", name: null, model_type: "text2img", credit_cost: null }
+  const baseUrl = await serve(t, (_request, response) => json(response, { status: "ok", workspace_id: "w", image_models: [model], video_models: [] }))
+  const client = await connect(t, home, baseUrl)
+  const result = await client.callTool({ name: "list_models", arguments: {} })
+  assert.equal(result.isError, undefined)
+  assert.deepEqual(result.structuredContent.image_models, [model])
 })

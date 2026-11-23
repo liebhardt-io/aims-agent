@@ -8,7 +8,7 @@ description: Generate videos from a text prompt (or a source image) with AI Medi
 Create videos via the AIMS API. **Prefer the first available method:**
 
 1. **MCP tool** `generate_video` if the `aims` MCP server is connected. Pass `prompt` and the selected model's source fields: `image_url` for image-to-video, plus `last_frame_url` for an end frame, or `image_urls` for reference-to-video. Returns JSON with the video URL and credit usage.
-2. **CLI** `aims video "<prompt>" --duration 6 --json` — if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Never run `aims login` without `--key`.
+2. **CLI** `aims video "<prompt>" --duration 6 --json`, if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Do not run bare `aims login` (it opens a browser); use `aims login --key`, or run `aims login --web --no-browser` only when the user wants browser approval and give them the printed URL.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/videos/generate` with `Authorization: Bearer $AIMS_API_KEY`.
 
 ## Inputs to gather
@@ -24,6 +24,7 @@ Create videos via the AIMS API. **Prefer the first available method:**
 - **resolution** (optional): output resolution when supported (e.g. `720p`, `1080p`).
 - **negative_prompt** (optional): elements to avoid, when the model supports it.
 - **make_public** (optional): make the result publicly shareable (returns a `share_url`).
+- **max_credits** (optional): the most this call may cost. Pass the price you confirmed with the user; a longer or sharper clip than expected is then refused and nothing is charged (CLI `--max-credits` or `AIMS_MAX_CREDITS`).
 
 ## Recommended models (credits are charged PER SECOND)
 
@@ -49,6 +50,15 @@ Upload local source images with MCP `upload_image` (raw base64 contents) or `aim
 3. Warn the user that video generation can take a few minutes and spends credits per second.
 4. Call the API (MCP tool > CLI > HTTP).
 5. Return the video URL. Report `credits_used` and `credits_remaining`.
+
+## Results you must not retry
+
+- **`status: "generating"`** (an image in an HTTP 202 batch, or a video error with `media_id`): still running, and charged if it completes. Never generate it again. Check it later with MCP `get_media`, `aims media <id>`, or `GET /api/v1/media/{id}` (scope `media:read`).
+- **402 with code `PAID_PLAN_REQUIRED`**: the workspace has no paid plan, even if it still has credits. Send the user to https://app.ai-media-studio.com/billing.
+- **402 without a code**: not enough credits for this request.
+- **400 with code `MAX_CREDITS_EXCEEDED`**: nothing was charged; the price is in `required`.
+- **410**: the model is discontinued; pick a current one with `list_models`.
+- **No response in time** (CLI code `CLIENT_TIMEOUT`): the generation may still complete and be charged; check the workspace before repeating it.
 
 ## HTTP example
 
@@ -88,4 +98,4 @@ aims video "a timelapse of clouds over a city skyline" -m fal-ai/kling-video/o3/
 
 - The response `video.url` is a direct, hosted MP4 URL.
 - Set `make_public: true` for a public `share_url`.
-- Credits are refunded automatically if generation fails.
+- A failed video is refunded automatically. A video still generating is not failed: see above.

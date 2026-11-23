@@ -4,6 +4,7 @@ import {
   AimsApiError,
   AimsClient,
   imageGenerationOutcome,
+  STILL_GENERATING_HINT,
   videoGenerationOutcome,
   apiErrorHint,
   missingApiKeyMessage,
@@ -40,28 +41,25 @@ export function ok(data: Record<string, unknown>): ToolResult {
 }
 
 export function fail(err: unknown): ToolResult {
-  let status: number | undefined
-  let message: string
-  if (err instanceof AimsApiError) {
-    status = err.status
-    message =
-      err.status >= 500
-        ? "the service failed to process the request. Please try again."
-        : err.message
-  } else {
-    message = (err as Error)?.message ?? String(err)
+  if (!(err instanceof AimsApiError)) {
+    const payload = { success: false, error: `Error: ${(err as Error)?.message ?? String(err)}` }
+    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }], isError: true }
   }
-  const hint = status !== undefined ? apiErrorHint(status) : ""
+  const body = err.body && typeof err.body === "object" ? (err.body as Record<string, unknown>) : {}
+  // A generation that is still running keeps the server's message and its media_id:
+  // "try again" would start and charge a second one.
+  const message = err.status >= 500 && !err.stillGenerating
+    ? "the service failed to process the request. Please try again."
+    : err.message
   const payload = {
     success: false,
-    error: status !== undefined ? `AIMS API error (${status}): ${message}` : `Error: ${message}`,
-    hint: hint || undefined,
-    next:
-      status === 401
-        ? ["aims login --key <aims_key>", "export AIMS_API_KEY=<aims_key>"]
-        : status === 402
-          ? ["aims whoami --json"]
-          : undefined,
+    error: err.status ? `AIMS API error (${err.status}): ${message}` : `AIMS API error: ${message}`,
+    code: err.code,
+    media_id: typeof body.media_id === "string" ? body.media_id : undefined,
+    status: err.stillGenerating ? "generating" : undefined,
+    required: typeof body.required === "number" ? body.required : undefined,
+    hint: apiErrorHint(err) || undefined,
+    next: err.status === 401 ? ["aims login --key <aims_key>", "export AIMS_API_KEY=<aims_key>"] : undefined,
   }
   return {
     content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
@@ -71,12 +69,17 @@ export function fail(err: unknown): ToolResult {
 
 export const SERVER_INSTRUCTIONS = `AI Media Studio (AIMS) generates images and videos. Authenticate with AIMS_API_KEY (or ~/.aims/config.json from \`aims login --key\`).
 
+Generating needs a paid plan: a 402 with code PAID_PLAN_REQUIRED means the workspace has none, even with credits left, so send the user to https://app.ai-media-studio.com/billing instead of retrying.
+
 Workflow:
 1. Call get_account if you need the credit balance or scopes.
 2. Call list_models to pick a live model id when the user did not specify one.
 3. For supplied image contents, call upload_image with image_base64 (requires media:write), then use the returned URL. For local files use aims upload and pass its returned workspace URL. MCP tools do not read local files.
 4. Call generate_image, edit_image, or generate_video. Each call spends workspace credits. Image references must use workspace-hosted URLs; arbitrary external image URLs are not accepted.
 5. Return the hosted url(s), credits_used, and credits_remaining to the user. On partial failure, preserve completed results and do not blindly retry the whole batch.
+6. An image or video with status "generating" (also in an error, with media_id) is still running and is charged if it completes. Never generate it again; check it later with get_media.
+
+Pass max_credits (or set AIMS_MAX_CREDITS) to cap what one call may spend; a 400 with code MAX_CREDITS_EXCEEDED charged nothing and reports the price in required.
 
 Defaults:
 - Image: fal-ai/nano-banana-pro. Use openai/gpt-image-2.5/flare/text-to-image for crisp text and google/nano-banana-2.1 for cheap drafts.
@@ -101,6 +104,7 @@ export const imageOutputSchema = z
     credits_used: z.number(),
     credits_remaining: z.number(),
     style_applied: z.string().optional(),
+    hint: z.string().optional(),
   })
   .passthrough()
 
@@ -127,9 +131,9 @@ export const videoOutputSchema = z
 
 const modelInfoSchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   model_type: z.string(),
-  credit_cost: z.number(),
+  credit_cost: z.number().nullable(),
   description: z.string().nullable().optional(),
   default_advanced_settings: z.record(z.unknown()).nullable().optional(),
   available_settings: z.record(z.unknown()).nullable().optional(),
@@ -141,6 +145,23 @@ export const modelsOutputSchema = z
     workspace_id: z.string(),
     image_models: z.array(modelInfoSchema),
     video_models: z.array(modelInfoSchema),
+  })
+  .passthrough()
+
+export const mediaOutputSchema = z
+  .object({
+    success: z.boolean(),
+    media: z
+      .object({
+        id: z.string(),
+        type: z.string(),
+        status: z.string(),
+        url: z.string().nullable(),
+        share_url: z.string().optional(),
+        error: z.string().optional(),
+        model: z.string().optional(),
+      })
+      .passthrough(),
   })
   .passthrough()
 
@@ -156,7 +177,8 @@ export const accountOutputSchema = z
 
 export function imageResult(result: ImageGenerateResult): ToolResult {
   const outcome = imageGenerationOutcome(result)
-  return { ...ok(outcome.result), ...(outcome.isError ? { isError: true } : {}) }
+  const data = outcome.pending.length ? { ...outcome.result, hint: STILL_GENERATING_HINT } : outcome.result
+  return { ...ok(data), ...(outcome.isError ? { isError: true } : {}) }
 }
 
 export function videoResult(result: VideoGenerateResult): ToolResult {

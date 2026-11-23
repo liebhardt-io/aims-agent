@@ -1,6 +1,6 @@
 {
   "name": "aims-agent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Generate images and videos with AI agents — MCP server, CLI, and Claude Code skills for AI Media Studio (AIMS).",
   "license": "Apache-2.0",
@@ -24,7 +24,7 @@
   },
   "packageManager": "pnpm@10.30.3",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

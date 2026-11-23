@@ -3,7 +3,7 @@ import { defineConfig } from "tsup"
 export default defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
-  target: "node18",
+  target: "node20",
   platform: "node",
   clean: true,
   noExternal: ["@ai-media-studio/core"],

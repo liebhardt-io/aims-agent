@@ -21,7 +21,7 @@ aims login --key <aims_key>
 export AIMS_API_KEY=<aims_key>
 ```
 
-Do not run bare `aims login` from an agent: interactive no-key login opens a browser, while non-TTY no-key login refuses. Only start `aims login --web --no-browser` when the user explicitly wants browser approval, then give them the printed URL. `--web` opts in without a TTY; `--no-browser` prevents automatic opening; `--paste` keeps the prior interactive key prompt. Command-local/global `--key` and `AIMS_API_KEY` take priority. Browser login uses S256 PKCE, random state, and a five-minute ephemeral loopback callback; failure or cancellation never saves a key. Keys are validated with `get_account` and saved with mode `0600`.
+Do not run bare `aims login` from an agent: interactive no-key login opens a browser, while non-TTY no-key login refuses. Only start `aims login --web --no-browser` when the user explicitly wants browser approval, then give them the printed URL. `--web` opts in without a TTY; `--no-browser` prevents automatic opening; `--paste` keeps the prior interactive key prompt. Command-local/global `--key` and `AIMS_API_KEY` take priority. Browser login uses S256 PKCE, random state, and a five-minute ephemeral loopback callback; failure or cancellation never saves a key. Keys are validated with `GET /images/generate` and saved with mode `0600`. `--web` and `--paste` ignore `AIMS_API_KEY`.
 
 ## Discover incrementally
 
@@ -48,13 +48,13 @@ url=$(aims image "a red panda astronaut" --print url) &&
   aims video "slow cinematic push-in" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$url" --duration 5 --json
 ```
 
-Image failures, including partial batches, exit 1 after printing results. Keep completed images and retry only missing work. Download errors retain the generated URLs; download those URLs again instead of regenerating.
+Image failures, including partial batches, exit 1 after printing results. Keep completed images and retry only images with `status: "failed"`; images still `generating` are reported separately. Download errors retain the generated URLs; download those URLs again instead of regenerating.
 
 Upload local source images with `aims upload ./photo.png --print url`. MCP `upload_image` takes supplied raw `image_base64` contents and an optional `filename`; it reads no local files. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL for image references; arbitrary external image URLs are not accepted.
 
 ## MCP
 
-Prefer the hosted HTTP server: **https://app.ai-media-studio.com/mcp**. The plugin and project `.mcp.json` use it without key environment variables. An OAuth-capable client handles browser approval. Approval requires a workspace **owner/admin**; every CLI/MCP connection is an ordinary workspace API key revocable under **Workspace Settings → API** (API Keys), sharing workspace credits and scopes. Logout removes only the local saved key, not server access.
+Prefer the hosted HTTP server: **https://app.ai-media-studio.com/mcp**. The plugin and project `.mcp.json` use it without key environment variables. An OAuth-capable client handles browser approval. Approval requires a workspace **owner/admin**; every CLI/MCP connection is an ordinary workspace API key revocable under **Workspace Settings → API** (API Keys), sharing workspace credits and scopes. `aims logout` removes only the local saved key; `aims logout --revoke` also revokes it on the server.
 
 Optional local stdio server: `npx -y @ai-media-studio/mcp` (`aims-mcp` when installed). Register with `AIMS_API_KEY` or a prior browser/manual `aims login`. Claude-style config uses `mcpServers`; VS Code's `.vscode/mcp.json` uses `servers` instead. See `packages/mcp/README.md` for separate examples.
 
@@ -63,7 +63,18 @@ Tools return JSON: `url`, `id`, `credits_used`, `credits_remaining`.
 1. `get_account` if you need credits/scopes.
 2. `list_models` to pick a live model id.
 3. `upload_image` for local source images, then `generate_image` / `edit_image` / `generate_video`.
-4. Return hosted URLs and credit usage to the user.
+4. `get_media` for a generation that is still running.
+5. Return hosted URLs and credit usage to the user.
+
+## Results you must not retry
+
+- `status: "generating"` (an image in an HTTP 202 batch, or a video error with `media_id`): still running and charged if it completes. Check it with `aims media <id> --json` or MCP `get_media`; never generate it again.
+- 402 `PAID_PLAN_REQUIRED`: the workspace needs a paid plan, even with credits left. 402 without a code: not enough credits.
+- 400 `MAX_CREDITS_EXCEEDED`: refused before charging; the price is in `required`.
+- 410: the model is discontinued. Pick a current one with `list_models`.
+- CLI code `CLIENT_TIMEOUT`: no answer in time; the generation may still complete and be charged.
+
+The CLI prints the HTTP status, the `code`, any `media_id`, and a hint for each of these on stderr, and in JSON with `--json`.
 
 Defaults when no model is given: `fal-ai/nano-banana-pro` (images), `fal-ai/kling-video/o3/pro/text-to-video` (video). Video credits are per second. Current models and prices: `reference/models.md`.
 
@@ -72,5 +83,5 @@ For a start and end frame, pass `image_url` and `last_frame_url` to a Kling, See
 ## Idempotency and cost
 
 - `aims login --key` is safe to retry (overwrites `~/.aims/config.json`).
-- Generation is **not** idempotent — each call spends credits. Use `--dry-run` to preview.
+- Generation is **not** idempotent: each call spends credits. Use `--dry-run` to preview, and `--max-credits` (or `AIMS_MAX_CREDITS`; MCP `max_credits`) to refuse anything above the price the user approved.
 - `aims logout --yes` skips the confirmation (non-TTY already skips it).

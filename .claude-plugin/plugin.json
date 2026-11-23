@@ -1,7 +1,7 @@
 {
   "name": "aims",
   "displayName": "AI Media Studio (AIMS)",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Generate images and videos with AI Media Studio. Connects the hosted MCP server with browser approval and bundles skills for creating and editing media.",
   "author": {
     "name": "liebhardt.io",
@@ -10,6 +10,8 @@
   "homepage": "https://github.com/liebhardt-io/aims-agent",
   "repository": "https://github.com/liebhardt-io/aims-agent",
   "license": "Apache-2.0",
+  "privacyPolicyUrl": "https://www.ai-media-studio.com/privacy",
+  "icon": "./.claude-plugin/icon.png",
   "keywords": [
     "ai",
     "image-generation",

@@ -10,19 +10,22 @@ import * as readline from "node:readline/promises"
 import { createRequire } from "node:module"
 import { stdin as input, stdout as output } from "node:process"
 import {
+  AimsApiError,
   AimsClient,
   DEFAULT_BASE_URL,
   imageGenerationOutcome,
   LOGIN_EXAMPLE,
   redactApiKey,
   readImageFile,
+  resolveMaxCredits,
+  STILL_GENERATING_HINT,
   type ImageGenerateParams,
   type ModelInfo,
   type VideoGenerateParams,
   videoGenerationOutcome,
 } from "@ai-media-studio/core"
 import { configPath, readConfig, resolveApiKey, resolveBaseUrl, writeConfig } from "./config.js"
-import { collect, parseIntOption, resolveOutputPath, downloadTo } from "./output.js"
+import { collect, parseIntOption, parsePositiveNumber, resolveOutputPath, downloadTo } from "./output.js"
 import { die, handleError, requireApiKey, usage, USAGE_EXIT } from "./errors.js"
 import { isInteractive, resolvePrompt } from "./prompt.js"
 import { printFields, printJson, progress, resolvePrintMode, type PrintMode } from "./print.js"
@@ -86,11 +89,24 @@ async function saveDownloads(
   return downloads
 }
 
-function reportImageFailure(failed: number): void {
-  process.stderr.write(failed > 0
-    ? `${failed} image generation(s) failed. Completed results are included in the output.\n`
-    : "Image generation returned no completed results.\n")
+function reportImageFailure(failed: number, pending: string[]): void {
+  if (pending.length > 0) {
+    process.stderr.write(`${pending.length} image(s) still generating: ${pending.join(", ")}\n${STILL_GENERATING_HINT}\n`)
+  }
+  if (failed > 0) {
+    process.stderr.write(`${failed} image generation(s) failed. Completed results are included in the output.\n`)
+  } else if (pending.length === 0) {
+    process.stderr.write("Image generation returned no completed results.\n")
+  }
   process.exitCode = 1
+}
+
+function maxCredits(opts: { maxCredits?: number }): number | undefined {
+  try {
+    return resolveMaxCredits(opts.maxCredits)
+  } catch (error) {
+    usage((error as Error).message)
+  }
 }
 
 const program = new Command()
@@ -128,8 +144,8 @@ Discovery:
 program
   .command("login")
   .description("Log in through a browser, or save and validate an AIMS API key")
-  .option("--key <key>", "API key to save (takes priority over browser login)")
-  .option("--web", "use browser login even without an interactive terminal")
+  .option("--key <key>", "API key to save (AIMS_API_KEY is used when no flag chooses another method)")
+  .option("--web", "use browser login, even without an interactive terminal or with AIMS_API_KEY set")
   .option("--no-browser", "print the approval URL without opening a browser")
   .option("--paste", "paste an API key at an interactive prompt instead of browser login")
   .addHelpText(
@@ -146,27 +162,40 @@ Examples:
   )
   .action(async (opts: { key?: string; web?: boolean; browser?: boolean; paste?: boolean }, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
-    let key = opts.key || g.key || process.env.AIMS_API_KEY
+    const explicitKey = opts.key || g.key
+    if (explicitKey && (opts.web || opts.paste)) usage("Choose either --key or --web/--paste.")
+    if (opts.web && opts.paste) usage("Choose either --web or --paste.")
+    // An explicit --web or --paste asks for that method, so AIMS_API_KEY does not override it.
+    let key = explicitKey || (opts.web || opts.paste ? undefined : process.env.AIMS_API_KEY)
+    let createdKeyName: string | undefined
     const baseUrl = resolveBaseUrl(g.baseUrl)
     if (!key) {
-      if (opts.web && opts.paste) usage("Choose either --web or --paste.")
       if (opts.paste && !isInteractive()) usage(`--paste requires an interactive terminal.\n  ${LOGIN_EXAMPLE}`)
       if (!isInteractive() && !opts.web) {
         usage(`No API key specified.\n  ${LOGIN_EXAMPLE}\n  aims login --web --no-browser\n  AIMS_API_KEY=aims_xxx aims login`)
       }
-      key = opts.paste
-        ? await promptTty("Paste your AIMS API key (aims_...): ")
-        : await webLogin(baseUrl, opts.browser).catch(handleError)
+      if (opts.paste) {
+        key = await promptTty("Paste your AIMS API key (aims_...): ")
+      } else {
+        const created = await webLogin(baseUrl, opts.browser).catch(handleError)
+        key = created.key
+        createdKeyName = created.name
+      }
     }
     if (!key) usage(`No API key provided.\n  ${LOGIN_EXAMPLE}`)
 
-    const client = new AimsClient({ apiKey: key, baseUrl })
+    let client: AimsClient
+    try {
+      client = new AimsClient({ apiKey: key, baseUrl })
+    } catch (err) {
+      handleError(err)
+    }
     try {
       const status = await client.account()
-      const existing = readConfig()
       const path = writeConfig({
         apiKey: key,
-        baseUrl: g.baseUrl || existing.baseUrl,
+        // Save the URL the key was checked against, so later calls do not send it to another host.
+        baseUrl: baseUrl === DEFAULT_BASE_URL ? undefined : baseUrl,
       })
       const payload = {
         logged_in: true,
@@ -178,6 +207,12 @@ Examples:
       if (mode === "json") printJson(payload)
       else printFields(payload)
     } catch (err) {
+      if (createdKeyName) {
+        process.stderr.write(
+          `Browser approval created the API key "${createdKeyName}", but it could not be checked, so it was not saved.\n` +
+            "Revoke it under Workspace Settings → API Keys, then run aims login again.\n",
+        )
+      }
       handleError(err)
     }
   })
@@ -187,27 +222,40 @@ Examples:
 // ---------------------------------------------------------------------------
 program
   .command("logout")
-  .description("Remove the saved API key")
+  .description("Remove the saved API key, and with --revoke also disable it on the server")
   .option("-y, --yes", "skip confirmation (default when stdin is not a TTY)", false)
+  .option("--revoke", "revoke the saved key server-side before removing it", false)
   .addHelpText(
     "after",
     `
 Examples:
   aims logout --yes
+  aims logout --revoke --yes
   aims logout --json
 `,
   )
-  .action(async (opts: { yes?: boolean }, command: Command) => {
+  .action(async (opts: { yes?: boolean; revoke?: boolean }, command: Command) => {
     const g = command.optsWithGlobals() as GlobalOpts
     if (isInteractive() && !opts.yes) {
-      const answer = await promptTty("Remove the saved API key? [y/N] ")
+      const answer = await promptTty(opts.revoke ? "Revoke and remove the saved API key? [y/N] " : "Remove the saved API key? [y/N] ")
       if (!/^y(es)?$/i.test(answer)) {
         die("Aborted.", 0)
       }
     }
     const existing = readConfig()
+    let revoked = false
+    if (opts.revoke) {
+      if (!existing.apiKey) usage("No saved API key to revoke.")
+      try {
+        await new AimsClient({ apiKey: existing.apiKey, baseUrl: resolveBaseUrl(g.baseUrl) }).revokeCurrentKey()
+        revoked = true
+      } catch (err) {
+        // A key that is already invalid needs no revocation; anything else keeps it saved.
+        if (!(err instanceof AimsApiError && err.status === 401)) handleError(err)
+      }
+    }
     const path = writeConfig({ baseUrl: existing.baseUrl })
-    const payload = { logged_out: true, config_path: path }
+    const payload = { logged_out: true, revoked, config_path: path }
     if (modeOf(g) === "json") printJson(payload)
     else printFields(payload)
   })
@@ -406,7 +454,10 @@ function imageOptions(command: Command, aspectRatioHelp: string): Command {
     .option("-q, --quality <quality>", "low, medium, high, auto")
     .option("--style <slug>", "style preset slug")
     .option("--seed <seed>", "seed for deterministic output")
+    .option("--safety-tolerance <level>", "1 (strictest) to 6 (Nano Banana models)")
+    .option("--web-search", "let Nano Banana models search the web (costs extra)")
     .option("--make-public", "make the result publicly shareable", false)
+    .option("--max-credits <credits>", "refuse, charging nothing, if the request costs more (default AIMS_MAX_CREDITS)", parsePositiveNumber)
     .option("-o, --output <path>", "download result(s) to a file or directory")
     .option("--stdin", "read prompt from stdin", false)
     .option("--dry-run", "print the request and exit without spending credits", false)
@@ -433,7 +484,10 @@ async function runImageGeneration(
     style_slug: opts.style,
     seed: opts.seed,
     image_urls: opts.imageUrl?.length ? opts.imageUrl : undefined,
+    safety_tolerance: opts.safetyTolerance,
+    enable_web_search: opts.webSearch,
     make_public: opts.makePublic || undefined,
+    max_credits: maxCredits(opts),
   }
   if (opts.dryRun) {
     printDryRun(g, "/images/generate", params)
@@ -472,7 +526,7 @@ async function runImageGeneration(
         saved: downloads.saved.join(", ") || undefined,
       })
     }
-    if (outcome.isError) reportImageFailure(outcome.failed)
+    if (outcome.isError) reportImageFailure(outcome.failed, outcome.pending)
   } catch (err) {
     handleError(err)
   }
@@ -529,6 +583,48 @@ Examples:
   })
 
 // ---------------------------------------------------------------------------
+// media
+// ---------------------------------------------------------------------------
+program
+  .command("media")
+  .description("Show the status and URL of one generation by id (requires media:read)")
+  .argument("<id>", "image or video id from a generation result, or media_id from an error")
+  .option("-o, --output <path>", "download the result once it completed")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  aims media 3f0c2a8e-1b7d-4c55-9f0e-6a1b2c3d4e5f --json
+  aims media 3f0c2a8e-1b7d-4c55-9f0e-6a1b2c3d4e5f --print url
+  aims media 3f0c2a8e-1b7d-4c55-9f0e-6a1b2c3d4e5f --output ./out
+`,
+  )
+  .action(async (id: string, opts: { output?: string }, command: Command) => {
+    const g = command.optsWithGlobals() as GlobalOpts
+    const mode = modeOf(g)
+    const client = makeClient(g)
+    try {
+      const { media } = await client.getMedia(id)
+      let downloads: Downloads = { saved: [], download_errors: [] }
+      if (opts.output && media.status === "completed" && media.url) {
+        downloads = await saveDownloads([media.url], opts.output, media.type.startsWith("video") ? ".mp4" : ".png")
+      }
+      if (mode === "json") printJson({ media, ...downloads })
+      else if (mode === "url") {
+        if (media.status === "completed" && media.url) process.stdout.write(`${media.url}\n`)
+      } else printFields({ ...media, saved: downloads.saved.join(", ") || undefined })
+      if (media.status === "generating") {
+        process.stderr.write("Still generating. Check again later; do not generate it again.\n")
+        process.exitCode = 1
+      } else if (media.status !== "completed") {
+        process.exitCode = 1
+      }
+    } catch (err) {
+      handleError(err)
+    }
+  })
+
+// ---------------------------------------------------------------------------
 // video
 // ---------------------------------------------------------------------------
 program
@@ -546,7 +642,9 @@ program
   .option("--extend-video-url <url>", "source video URL for extend-video")
   .option("-r, --resolution <res>", "e.g. 720p, 1080p")
   .option("--negative-prompt <text>", "negative prompt when supported")
+  .option("--seed <seed>", "seed for deterministic output when supported")
   .option("--make-public", "make the result publicly shareable", false)
+  .option("--max-credits <credits>", "refuse, charging nothing, if the request costs more (default AIMS_MAX_CREDITS)", parsePositiveNumber)
   .option("-o, --output <path>", "download the result to a file or directory")
   .option("--stdin", "read prompt from stdin", false)
   .option("--dry-run", "print the request and exit without spending credits", false)
@@ -582,7 +680,9 @@ Examples:
       extend_video_url: opts.extendVideoUrl,
       resolution: opts.resolution,
       negative_prompt: opts.negativePrompt,
+      seed: opts.seed,
       make_public: opts.makePublic || undefined,
+      max_credits: maxCredits(opts),
     }
     if (opts.dryRun) {
       printDryRun(g, "/videos/generate", params)

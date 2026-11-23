@@ -20,6 +20,15 @@ export function parseIntOption(value: string): number {
   return n
 }
 
+/** Parse a positive number option, such as --max-credits. */
+export function parsePositiveNumber(value: string): number {
+  const n = Number(value)
+  if (!/^\d+(\.\d+)?$/.test(value) || !Number.isFinite(n) || n <= 0) {
+    throw new InvalidArgumentError(`Expected a positive number but got "${value}"`)
+  }
+  return n
+}
+
 /** Derive a reasonable filename for a downloaded asset. */
 export function deriveFilename(url: string, index: number, fallbackExt: string): string {
   try {

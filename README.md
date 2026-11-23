@@ -96,6 +96,8 @@ aims-agent/
 | Text/image/reference/start-and-end-frame video | `generate_video` | `aims video --json` | `POST /videos/generate` |
 | List models | `list_models` | `aims models --json` | `GET /models` |
 | Account & credits | `get_account` | `aims whoami --json` | `GET /images/generate` |
+| Status of a generation | `get_media` | `aims media <id> --json` | `GET /media/{id}` |
+| Revoke the key in use | | `aims logout --revoke` | `DELETE /keys/current` |
 
 > **Note:** Image-to-video and reference-to-video use dedicated model ids (e.g. `fal-ai/kling-video/o3/pro/image-to-video`). Pass `image_url` (or `image_urls`) together with that model id. Use `list_models` / `aims models` / `GET /models` to discover them.
 
@@ -103,14 +105,17 @@ Discover live models and pricing any time — see [`reference/models.md`](refere
 
 Upload local source images with `aims upload <file>` before editing or image-to-video. MCP `upload_image` accepts supplied `image_base64` contents and reads no local files. Uploads require `media:write` and accept raster images up to 20 MiB. Use the returned workspace URL as the reference; arbitrary external image URLs are not accepted.
 
+Generating needs a paid plan. If a generation is still running when a request returns (`status: "generating"`), it is charged if it completes: check it with `get_media` or `aims media <id>` instead of generating it again. Pass `max_credits` (CLI `--max-credits`) to refuse any call that would cost more than you approved; a refused call charges nothing.
+
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AIMS_API_KEY` | — | Your `aims_` key for CLI/local stdio (unless saved by login). Not needed for hosted MCP browser approval. |
-| `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL. `AIMS_API_BASE_URL` is accepted as an alias. |
+| `AIMS_BASE_URL` | `https://app.ai-media-studio.com/api/v1` | Override the API base URL; must be `https` except on localhost. `AIMS_API_BASE_URL` is accepted as an alias. |
+| `AIMS_MAX_CREDITS` | none | Default `max_credits` for every CLI and local MCP generation. |
 
-The CLI persists a validated key at `~/.aims/config.json` (mode `600`) after browser or manual login. Without a key, `aims login` defaults to browser login only in an interactive terminal; non-TTY callers must opt in with `--web` or supply a key. Browser login uses a five-minute loopback callback and S256 PKCE, never prints the token, and saves nothing on cancellation or failure. Hosted MCP clients manage their own credential storage. All these connections are ordinary workspace API keys, sharing workspace credits and revocable under **Workspace Settings → API**. `aims logout` removes only the local saved key, not the server-side connection.
+The CLI persists a validated key at `~/.aims/config.json` (mode `600`) after browser or manual login. Without a key, `aims login` defaults to browser login only in an interactive terminal; non-TTY callers must opt in with `--web` or supply a key. Browser login uses a five-minute loopback callback and S256 PKCE, never prints the token, and saves nothing on cancellation or failure. Hosted MCP clients manage their own credential storage. All these connections are ordinary workspace API keys, sharing workspace credits and revocable under **Workspace Settings → API**. `aims logout` removes only the local saved key; `aims logout --revoke` also revokes it on the server.
 
 See [AGENTS.md](AGENTS.md) for the agent-oriented CLI/MCP contract (`--json`, `--stdin`, `--dry-run`, `aims-mcp --list-tools`).
 
@@ -129,7 +134,7 @@ node packages/cli/dist/index.js whoami                  # CLI
 
 ### Amp orbs
 
-`.agents/setup` uses the orb's preinstalled Node.js (>=18), ensures the pnpm
+`.agents/setup` uses the orb's preinstalled Node.js (>=20), ensures the pnpm
 version pinned in `package.json`, installs dependencies with the frozen lockfile,
 and builds all packages. Amp snapshots this environment for reuse by fresh orbs;
 when setup reruns after repository changes, pnpm reuses its cached dependencies.

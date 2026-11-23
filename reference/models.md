@@ -54,3 +54,4 @@ When a request names no `model`, the API uses:
 
 - Image: per-image credits × `n`. Nano Banana prices rise with `resolution`; GPT Image prices depend on `quality` and size.
 - Video: credits per second × duration, rounded up. Resolution and, on the Kling O3 and v3 models, `audio` change the per-second rate.
+- Discovery's `credit_cost` is the base rate, so a higher resolution, quality, or audio can cost more. To be sure a call stays within what the user approved, pass `max_credits`: a higher price is refused with 400 `MAX_CREDITS_EXCEEDED` and nothing is charged.

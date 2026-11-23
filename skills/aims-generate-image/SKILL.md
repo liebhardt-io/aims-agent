@@ -8,7 +8,7 @@ description: Generate images from a text prompt with AI Media Studio (AIMS). Use
 Create images via the AIMS API. There are three ways to call it — **prefer the first one that is available**:
 
 1. **MCP tool** `generate_image` — if the `aims` MCP server is connected. Pass `prompt` plus any of `model`, `aspect_ratio`, `size`, `n`, `resolution`, `output_format`, `quality`, `style_slug`, `seed`, `image_urls`, `make_public`. The tool returns JSON (`url`, `id`, `credits_used`).
-2. **CLI** `aims image "<prompt>" --json` — if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Never run `aims login` without `--key`.
+2. **CLI** `aims image "<prompt>" --json`, if the `aims` CLI is installed (`aims login --key` or `AIMS_API_KEY`). Do not run bare `aims login` (it opens a browser); use `aims login --key`, or run `aims login --web --no-browser` only when the user wants browser approval and give them the printed URL.
 3. **HTTP** — `POST https://app.ai-media-studio.com/api/v1/images/generate` with `Authorization: Bearer $AIMS_API_KEY`.
 
 ## Inputs to gather
@@ -18,7 +18,7 @@ Create images via the AIMS API. There are three ways to call it — **prefer the
 - **aspect_ratio** (optional): `1:1`, `16:9`, `9:16`, `4:5`, `3:2`, etc. It takes precedence over `size`.
 - **size** (optional): pixel dimensions for GPT Image models, e.g. `1024x1024`, `1536x1024`.
 - **resolution** (optional): `1K`, `2K` or `4K` for Nano Banana models.
-- **n** (optional): number of variations, 1–8. Default 1.
+- **n** (optional): number of variations, 1–8 (Nano Banana and GPT Image models return at most 4). Default 1.
 - **output_format** (optional): `png`, `jpeg`, or `webp`. Default `png`.
 - **quality** (optional): `low`, `medium`, `high`, or `auto` (model dependent).
 - **style_slug** (optional): style preset slug, e.g. `anime-style`.
@@ -44,7 +44,16 @@ Discover what's live for the workspace with the `list_models` MCP tool, `aims mo
 2. Pick a model. Omit `model` for Nano Banana Pro unless the user needs crisp text (use `openai/gpt-image-2.5/flare/text-to-image`) or cheap drafts (`google/nano-banana-2.1`).
 3. Call the API (MCP tool > CLI > HTTP).
 4. Return the resulting image URL(s) to the user. Report `credits_used` and `credits_remaining`.
-5. Inspect per-image outcomes. Partial and total failures set MCP `isError` or CLI exit 1 while retaining completed results. Retry only failed work.
+5. Inspect per-image outcomes. Partial and total failures set MCP `isError` or CLI exit 1 while retaining completed results. Retry only images with `status: "failed"`.
+
+## Results you must not retry
+
+- **`status: "generating"`** (an image in an HTTP 202 batch, or a video error with `media_id`): still running, and charged if it completes. Never generate it again. Check it later with MCP `get_media`, `aims media <id>`, or `GET /api/v1/media/{id}` (scope `media:read`).
+- **402 with code `PAID_PLAN_REQUIRED`**: the workspace has no paid plan, even if it still has credits. Send the user to https://app.ai-media-studio.com/billing.
+- **402 without a code**: not enough credits for this request.
+- **400 with code `MAX_CREDITS_EXCEEDED`**: nothing was charged; the price is in `required`.
+- **410**: the model is discontinued; pick a current one with `list_models`.
+- **No response in time** (CLI code `CLIENT_TIMEOUT`): the generation may still complete and be charged; check the workspace before repeating it.
 
 ## HTTP example
 
@@ -79,6 +88,6 @@ aims image "a minimalist logo of a mountain, flat vector" -m google/nano-banana-
 
 ## Notes
 
-- Each generation spends workspace credits; failed images are automatically refunded.
+- Each generation spends workspace credits; failed images are automatically refunded. Pass `max_credits` to cap one call.
 - Set `make_public: true` to get a public `share_url`.
 - Image URLs are served from `cdn.ai-media-studio.com`. To save locally, use the CLI `--output` flag or fetch the URL.

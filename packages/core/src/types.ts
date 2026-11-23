@@ -49,8 +49,6 @@ export interface ImageGenerateParams {
   output_format?: "png" | "jpeg" | "webp"
   /** Image quality (model dependent): low, medium, high, auto, standard, hd. */
   quality?: string
-  /** Background (OpenAI/GPT image): auto, transparent, opaque. */
-  background?: string
   /** Seed for deterministic output. */
   seed?: number | string
   /** Safety tolerance level "1" (strictest) to "6" (least strict). */
@@ -67,13 +65,16 @@ export interface ImageGenerateParams {
   sync_mode?: boolean
   /** Make the generated image publicly shareable; response includes share_url. */
   make_public?: boolean
+  /** Refuse the request (400 MAX_CREDITS_EXCEEDED, nothing charged) when it would cost more credits. */
+  max_credits?: number
 }
 
 export interface GeneratedImage {
   id: string
   url: string | null
   share_url?: string
-  status: "completed" | "failed" | string
+  /** "generating" means still running: it is charged if it completes, so check it with getMedia instead of regenerating. */
+  status: "completed" | "failed" | "generating" | string
   error?: string
   credits_refunded?: number
 }
@@ -123,6 +124,8 @@ export interface VideoGenerateParams {
   safety_tolerance?: string
   /** Make the generated video publicly shareable; response includes share_url. */
   make_public?: boolean
+  /** Refuse the request (400 MAX_CREDITS_EXCEEDED, nothing charged) when it would cost more credits. */
+  max_credits?: number
 }
 
 export interface GeneratedVideo {
@@ -145,15 +148,31 @@ export interface VideoGenerateResult {
   credits_remaining: number
 }
 
+export interface MediaStatusResult {
+  success: boolean
+  media: {
+    id: string
+    type: string
+    status: "completed" | "failed" | "generating" | string
+    /** Set once the generation completed. */
+    url: string | null
+    share_url?: string
+    error?: string
+    model?: string
+    created_at: string
+    updated_at: string
+  }
+}
+
 export interface ModelInfo {
   /** Model id to pass as `model`. */
   id: string
   /** Human-readable label. */
-  name: string
+  name: string | null
   /** Model type, e.g. text2img, img2img, text2video, img2video. */
   model_type: string
-  /** Credit cost (per image for image models, per second for video models). */
-  credit_cost: number
+  /** Base credit cost (per image for image models, per second for video models); resolution, quality and audio can change it. */
+  credit_cost: number | null
   description?: string | null
   default_advanced_settings?: Record<string, unknown> | null
   available_settings?: Record<string, unknown> | null

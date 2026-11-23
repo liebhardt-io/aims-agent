@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
-import { imageBlobFromBase64, MAX_IMAGE_BASE64_LENGTH, type ImageGenerateParams, type VideoGenerateParams } from "@ai-media-studio/core"
+import { imageBlobFromBase64, MAX_IMAGE_BASE64_LENGTH, resolveMaxCredits, type ImageGenerateParams, type VideoGenerateParams } from "@ai-media-studio/core"
 import {
   PACKAGE_VERSION,
   SERVER_INSTRUCTIONS,
@@ -9,11 +9,53 @@ import {
   getClient,
   imageOutputSchema,
   imageResult,
+  mediaOutputSchema,
   modelsOutputSchema,
   ok,
   videoOutputSchema,
   videoResult,
 } from "./format.js"
+
+type ToolExtra = {
+  _meta?: { progressToken?: string | number }
+  sendNotification: (notification: { method: "notifications/progress"; params: { progressToken: string | number; progress: number; message?: string } }) => Promise<void>
+}
+
+const PROGRESS_INTERVAL_MS = 15_000
+
+/**
+ * Generations take minutes. When the client asks for progress, report elapsed
+ * seconds right away and then every 15 s, so clients that reset their request
+ * timeout on progress do not give up on a generation that is still being paid for.
+ */
+async function withProgress<T>(extra: ToolExtra, label: string, work: () => Promise<T>): Promise<T> {
+  const token = extra._meta?.progressToken
+  if (token === undefined) return work()
+  const started = Date.now()
+  const report = () => {
+    const seconds = Math.round((Date.now() - started) / 1000)
+    extra
+      .sendNotification({ method: "notifications/progress", params: { progressToken: token, progress: seconds, message: `${label} (${seconds} s)` } })
+      .catch(() => {})
+  }
+  report()
+  const timer = setInterval(report, PROGRESS_INTERVAL_MS)
+  try {
+    return await work()
+  } finally {
+    clearInterval(timer)
+  }
+}
+
+const maxCredits = z
+  .number()
+  .positive()
+  .optional()
+  .describe("Refuse the call, charging nothing, if it would cost more credits than this. Defaults to AIMS_MAX_CREDITS when set.")
+
+function withMaxCredits<T extends { max_credits?: number }>(args: T): T {
+  return { ...args, max_credits: args.max_credits ?? resolveMaxCredits() }
+}
 
 export function createAimsServer(): McpServer {
   const server = new McpServer(
@@ -90,6 +132,8 @@ export function createAimsServer(): McpServer {
           .optional()
           .describe("Workspace-hosted reference image URLs for editing. Max 10. Upload local files with upload_image first."),
         seed: z.union([z.number(), z.string()]).optional().describe("Seed for deterministic output."),
+        safety_tolerance: z.enum(["1", "2", "3", "4", "5", "6"]).optional().describe("Moderation strictness for Nano Banana models: 1 (strictest) to 6."),
+        enable_web_search: z.boolean().optional().describe("Let Nano Banana models search the web for this prompt (costs extra credits)."),
         limit_generations: z
           .boolean()
           .optional()
@@ -98,12 +142,14 @@ export function createAimsServer(): McpServer {
           .boolean()
           .optional()
           .describe("Make the result publicly shareable; returns a share_url."),
+        max_credits: maxCredits,
       },
       outputSchema: imageOutputSchema,
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        const result = await getClient().generateImage(args as ImageGenerateParams)
+        const client = getClient()
+        const result = await withProgress(extra, "Generating image(s)", () => client.generateImage(withMaxCredits(args) as ImageGenerateParams))
         return imageResult(result)
       } catch (err) {
         return fail(err)
@@ -133,20 +179,24 @@ export function createAimsServer(): McpServer {
           .describe("Workspace-hosted source image URLs to edit. 1-10."),
         model: z.string().optional().describe("Model id. Defaults to an edit-capable model."),
         n: z.number().int().min(1).max(8).optional().describe("Number of edited variations (1-8). Default 1."),
-        aspect_ratio: z.string().optional().describe("Defaults to 'auto' to preserve proportions."),
+        aspect_ratio: z.string().optional().describe("Defaults to 'auto' to preserve the source proportions."),
         resolution: z.string().optional().describe("0.5K, 1K, 2K, or 4K (model dependent)."),
         size: z.string().optional().describe("Pixel size like 1024x1024 (OpenAI models)."),
         output_format: z.enum(["png", "jpeg", "webp"]).optional(),
         quality: z.string().optional().describe("low, medium, high, auto (model dependent)."),
         style_slug: z.string().optional().describe("Optional style preset slug, e.g. 'anime-style'."),
         seed: z.union([z.number(), z.string()]).optional().describe("Seed for deterministic output."),
+        safety_tolerance: z.enum(["1", "2", "3", "4", "5", "6"]).optional().describe("Moderation strictness for Nano Banana models: 1 (strictest) to 6."),
         make_public: z.boolean().optional(),
+        max_credits: maxCredits,
       },
       outputSchema: imageOutputSchema,
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        const result = await getClient().generateImage(args as ImageGenerateParams)
+        const client = getClient()
+        const params = withMaxCredits({ ...args, aspect_ratio: args.aspect_ratio ?? "auto" })
+        const result = await withProgress(extra, "Editing image(s)", () => client.generateImage(params as ImageGenerateParams))
         return imageResult(result)
       } catch (err) {
         return fail(err)
@@ -193,14 +243,44 @@ export function createAimsServer(): McpServer {
         extend_video_url: z.string().url().optional().describe("Source video URL for extend-video models."),
         resolution: z.string().optional().describe("Resolution when supported (e.g. 720p, 1080p)."),
         negative_prompt: z.string().optional().describe("Negative prompt when supported."),
+        seed: z.union([z.number(), z.string()]).optional().describe("Seed for deterministic output when supported."),
         make_public: z.boolean().optional().describe("Make the result publicly shareable."),
+        max_credits: maxCredits,
       },
       outputSchema: videoOutputSchema,
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        const result = await getClient().generateVideo(args as VideoGenerateParams)
+        const client = getClient()
+        const result = await withProgress(extra, "Generating video", () => client.generateVideo(withMaxCredits(args) as VideoGenerateParams))
         return videoResult(result)
+      } catch (err) {
+        return fail(err)
+      }
+    },
+  )
+
+  server.registerTool(
+    "get_media",
+    {
+      title: "Get media status",
+      description:
+        "Read one generation's status and URL by id. Use it for an image or video that returned status \"generating\" " +
+        "(or an error with media_id) instead of generating again. Read-only; requires media:read.",
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        id: z.string().uuid().describe("Image or video id from generate_image, edit_image or generate_video, or media_id from an error."),
+      },
+      outputSchema: mediaOutputSchema,
+    },
+    async ({ id }) => {
+      try {
+        const result = await getClient().getMedia(id)
+        return ok({ ...result })
       } catch (err) {
         return fail(err)
       }

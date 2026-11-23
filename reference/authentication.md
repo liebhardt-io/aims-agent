@@ -11,7 +11,7 @@ aims login --paste              # prior interactive key-paste path
 aims login --key aims_xxx       # manual key / automation
 ```
 
-Command-local `--key`, global `--key`, and `AIMS_API_KEY` take priority in that order. Interactive no-key login defaults to the browser; non-TTY no-key login refuses unless `--web` is supplied. `--no-browser` suppresses automatic opening, not the printed approval URL. Browser login discovers OAuth endpoints at the API base URL's origin, registers a public client, and uses an authorization code with S256 PKCE and random state. Its ephemeral `127.0.0.1` callback expires after five minutes. The CLI validates the returned key with `get_account` before saving; cancellation, wrong state, and failures do not overwrite saved config or print the token.
+Command-local `--key`, global `--key`, and `AIMS_API_KEY` take priority in that order. Interactive no-key login defaults to the browser; non-TTY no-key login refuses unless `--web` is supplied. `--no-browser` suppresses automatic opening, not the printed approval URL. Browser login discovers OAuth endpoints at the API base URL's origin, registers a public client, and uses an authorization code with S256 PKCE and random state. Its ephemeral `127.0.0.1` callback expires after five minutes. The CLI validates the returned key with `GET /images/generate` before saving; cancellation, wrong state, and failures do not overwrite saved config or print the token. `--web` and `--paste` ignore `AIMS_API_KEY` and cannot be combined with `--key`. The new key is named `AIMS CLI on <host> (<date>)`, so you can find it in the key list. If the key cannot be validated after you approved it, the CLI names it so you can revoke it. Login also saves a non-default `AIMS_BASE_URL`, so the key keeps talking to the server that issued it.
 
 The hosted MCP endpoint is **https://app.ai-media-studio.com/mcp**. An OAuth-capable MCP client handles browser approval and stores its own credential; no `AIMS_API_KEY` environment variable is needed. See [MCP configuration](../packages/mcp/README.md), including VS Code's `servers` format versus Claude's `mcpServers`.
 
@@ -48,7 +48,7 @@ X-API-Key: aims_xxxxxxxxxxxxxxxxxxxxxxxx
 | CLI (`@ai-media-studio/cli`) | `--key` > `AIMS_API_KEY` > saved config; `aims login` saves a validated browser/manual key with mode `600` |
 | Direct HTTP | `Authorization` / `X-API-Key` header you set |
 
-Override the API base URL with `AIMS_BASE_URL` (default `https://app.ai-media-studio.com/api/v1`; `AIMS_API_BASE_URL` is accepted as an alias).
+Override the API base URL with `AIMS_BASE_URL` (default `https://app.ai-media-studio.com/api/v1`; `AIMS_API_BASE_URL` is accepted as an alias). The URL must use `https`, except for `localhost`, `127.0.0.1`, and `::1`, so a key is never sent in clear text.
 
 ## Verify a key
 
@@ -62,5 +62,5 @@ Returns workspace id, credit balance, scopes, and available image models.
 ## Security
 
 - **Never commit API keys** or expose them in client-side code.
-- The CLI stores the key locally at `~/.aims/config.json` with `600` permissions. Run `aims logout` to remove it locally; this does not revoke server access.
+- The CLI stores the key locally at `~/.aims/config.json` with `600` permissions. `aims logout` removes it locally only. `aims logout --revoke` first revokes the key on the server (`DELETE /keys/current`), then removes it; if revocation fails for a reason other than an already invalid key, the key stays saved so you can retry.
 - Revoke connections or rotate leaked keys under **Workspace Settings → API**. Hosted MCP clients manage their local copies independently.

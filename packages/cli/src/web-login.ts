@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import { createServer } from "node:http"
+import { hostname } from "node:os"
 
 const CALLBACK_TIMEOUT = 5 * 60 * 1000
 
@@ -40,8 +41,21 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
-/** Public-client OAuth login. The returned key is validated by the caller before saving. */
-export async function webLogin(baseUrl: string, browser = true): Promise<string> {
+/**
+ * Name the key after this machine and day, so each login is recognizable under
+ * Workspace Settings → API Keys (the server appends " (connected app)").
+ */
+export function cliClientName(now = new Date()): string {
+  const host = hostname().replace(/[^\w.-]/g, "").slice(0, 40) || "unknown host"
+  return `AIMS CLI on ${host} (${now.toISOString().slice(0, 10)})`
+}
+
+/**
+ * Public-client OAuth login. Approval creates a workspace API key; the caller
+ * validates it before saving and must tell the user about it if that fails.
+ */
+export async function webLogin(baseUrl: string, browser = true): Promise<{ key: string; name: string }> {
+  const clientName = cliClientName()
   const origin = new URL(baseUrl).origin
   const metadata = await requestJson(endpoint(`${origin}/.well-known/oauth-authorization-server`))
   const authorizationEndpoint = endpoint(metadata.authorization_endpoint)
@@ -100,7 +114,7 @@ export async function webLogin(baseUrl: string, browser = true): Promise<string>
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_name: "AIMS CLI",
+        client_name: clientName,
         redirect_uris: [redirectUri],
         grant_types: ["authorization_code"],
         response_types: ["code"],
@@ -128,7 +142,7 @@ export async function webLogin(baseUrl: string, browser = true): Promise<string>
       signal: abort.signal,
     })
     if (typeof token.access_token !== "string" || !token.access_token) throw new Error("OAuth exchange did not return an access token.")
-    return token.access_token
+    return { key: token.access_token, name: `${clientName} (connected app)` }
   } finally {
     clearTimeout(timer)
     process.off("SIGINT", cancel)

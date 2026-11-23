@@ -19,7 +19,7 @@ aims login --key aims_xxx        # non-interactive / automation
 
 Browser login asks you to sign in and select a workspace. Approval requires a workspace **owner/admin** and creates an ordinary workspace API key, not a separate kind of credential. All CLI and hosted MCP connections can be revoked under **Workspace Settings → API** (API Keys), and share the workspace's credits and key scopes.
 
-The CLI validates the key with `get_account` before saving it to `~/.aims/config.json` (mode `600`); the token is never printed. Command-local `--key`, global `--key`, then `AIMS_API_KEY` take priority over browser login. Other commands also read the saved key. `aims logout` deletes the local credential only; revoke it in Workspace Settings to remove server access.
+The CLI validates the key with `GET /images/generate` before saving it to `~/.aims/config.json` (mode `600`); the token is never printed. Command-local `--key`, global `--key`, then `AIMS_API_KEY` take priority over browser login. Other commands also read the saved key. `aims logout` deletes the local credential only; `aims logout --revoke` also revokes the key on the server. Browser login names the key `AIMS CLI on <host> (<date>)`.
 
 If no explicit/environment key is available, interactive login defaults to the browser. Without a TTY, login exits immediately unless `--web` is supplied; `--paste` requires a TTY. `--no-browser` disables automatic opening but still prints the approval URL to stderr. Open it in a browser on the same machine as the CLI (or forward its loopback callback when using a remote machine). A random state and S256 PKCE protect the authorization-code flow; the callback binds to an ephemeral `127.0.0.1` port and times out after five minutes. Cancellation, incorrect state, or failed exchange/validation leaves saved config unchanged.
 
@@ -49,8 +49,13 @@ aims video "drone shot over snowy mountains at sunrise" -m fal-ai/kling-video/o3
 aims video "transition between scenes" -m fal-ai/kling-video/o3/pro/image-to-video \
   --image-url "$START_URL" --last-frame-url "$END_URL" --json
 
-# Preview without spending credits
+# Preview without spending credits, and cap what a call may cost
 aims image "a red panda astronaut" --dry-run --json
+aims video "waves at sunset" -d 6 --max-credits 130 --json
+
+# Check a generation that was still running
+aims media <media-id> --json
+aims media <media-id> --output ./out
 ```
 
 ### Global flags
@@ -61,7 +66,7 @@ aims image "a red panda astronaut" --dry-run --json
 - `--print text|json|url` — `url` prints result URL(s) only, one per line
 - `--quiet` — suppress progress on stderr
 
-`AIMS_OUTPUT=json` is equivalent to `--json`.
+`AIMS_OUTPUT=json` is equivalent to `--json`. `AIMS_MAX_CREDITS` sets a default `--max-credits` for every generation. The base URL must use `https` except on localhost.
 
 Run `aims --help` or `aims <command> --help` for examples.
 
@@ -72,10 +77,11 @@ Without `--model`, images use `fal-ai/nano-banana-pro` and videos `fal-ai/kling-
 ## Agent notes
 
 - Progress messages go to **stderr**. stdout is the result.
-- Exit `2` means usage error (missing flags); exit `1` means API/runtime error.
+- Exit `2` means usage error (missing flags); exit `1` means API/runtime error. Errors print the HTTP status, any `code` and `media_id`, and a hint on what to do next.
+- A generation still `generating` when the request returns is charged if it completes. Check it with `aims media <id>` (exit `1` until it completed) instead of generating it again.
 - Partial and total image failures exit `1` after printing the result. JSON retains per-image errors and completed URLs; `--print url` retains completed URLs. Check the exit code before chaining another generation.
 - Download failures exit `1` while preserving the generation result, `saved` paths, and `download_errors` in JSON. Retry the download using its URL instead of regenerating paid media.
-- `aims login --key` is idempotent. Generation is not — use `--dry-run` first if unsure.
+- `aims login --key` is idempotent. Generation is not: use `--dry-run` first if unsure.
 - Chain successful results with `--print url`: `url=$(aims image "mountains" --print url) && aims video "pan across" --model fal-ai/kling-video/o3/pro/image-to-video --image-url "$url" --json`
 
 ## Prefer MCP?

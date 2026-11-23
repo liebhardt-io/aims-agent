@@ -134,3 +134,106 @@ test("upload prints the workspace URL and rejects oversized files before network
   assert.match(rejected.stderr, /20 MiB/)
   assert.equal(requests, 1)
 })
+
+// The API answers 202 while an image is still generating, and 503 with
+// status "generating" for a video in recovery. Both are charged if they
+// complete, so the CLI must say so instead of reporting a retryable failure.
+const pendingImage = { id: "pending-image", url: null, status: "generating", credits_refunded: 0 }
+
+test("images still generating are reported as pending, never as failed work to retry", async (t) => {
+  const home = await temporaryHome(t)
+  const batch = imageBatch([completedImage, pendingImage])
+  const baseUrl = await serve(t, (_request, response) => json(response, batch, 202))
+  const output = await runCli(["image", "test", "-n", "2", "--json"], environment(home, baseUrl))
+  assert.equal(output.code, 1)
+  assert.deepEqual(JSON.parse(output.stdout).images, batch.images)
+  assert.match(output.stderr, /1 image\(s\) still generating: pending-image/)
+  assert.match(output.stderr, /Do not generate it again/)
+  assert.doesNotMatch(output.stderr, /failed/)
+})
+
+test("API errors keep the code, media id and the matching next step", async (t) => {
+  const home = await temporaryHome(t)
+  let reply
+  const baseUrl = await serve(t, (_request, response) => json(response, ...reply))
+  reply = [{ error: "Video generation is awaiting recovery", media_id: "m-1", status: "generating" }, 503]
+  const recovering = await runCli(["video", "test", "--json"], environment(home, baseUrl))
+  assert.equal(recovering.code, 1)
+  assert.match(recovering.stderr, /awaiting recovery\nmedia_id: m-1\n.*Do not generate it again/)
+  reply = [{ error: "Plans start at $19/month.", code: "PAID_PLAN_REQUIRED" }, 402]
+  const unpaid = await runCli(["image", "test"], environment(home, baseUrl))
+  assert.match(unpaid.stderr, /\(402 PAID_PLAN_REQUIRED\)/)
+  assert.match(unpaid.stderr, /needs a paid plan, even with credits left/)
+  assert.doesNotMatch(unpaid.stderr, /enough credits/)
+  reply = [{ error: "Insufficient credits", required: 60, available: 10 }, 402]
+  const broke = await runCli(["image", "test"], environment(home, baseUrl))
+  assert.match(broke.stderr, /not have enough credits/)
+})
+
+test("media reports a generation by id and exits 1 until it completed", async (t) => {
+  const home = await temporaryHome(t)
+  const id = "3f0c2a8e-1b7d-4c55-9f0e-6a1b2c3d4e5f"
+  let media
+  let path
+  const baseUrl = await serve(t, (request, response) => {
+    path = request.url
+    json(response, { success: true, media })
+  })
+  media = { id, type: "video_generation", status: "generating", url: null, created_at: "t0", updated_at: "t1" }
+  const running = await runCli(["media", id, "--print", "url"], environment(home, baseUrl))
+  assert.equal(path, `/media/${id}`)
+  assert.equal(running.code, 1)
+  assert.equal(running.stdout, "")
+  assert.match(running.stderr, /Still generating/)
+  media = { ...media, status: "completed", url: "https://cdn.example.test/workspaces/test/video.mp4" }
+  const done = await runCli(["media", id, "--print", "url"], environment(home, baseUrl))
+  assert.equal(done.code, 0, done.stderr)
+  assert.equal(done.stdout, `${media.url}\n`)
+})
+
+test("logout --revoke disables the saved key before removing it, and keeps it if revocation fails", async (t) => {
+  const home = await temporaryHome(t)
+  const configPath = join(home, ".aims/config.json")
+  let status = 200
+  const requests = []
+  const baseUrl = await serve(t, (request, response) => {
+    requests.push(`${request.method} ${request.url} ${request.headers.authorization}`)
+    json(response, status === 200 ? { success: true, revoked: true } : { error: "Database unavailable" }, status)
+  })
+  const env = { ...environment(home, baseUrl), AIMS_API_KEY: "" }
+  const save = () => mkdir(join(home, ".aims"), { recursive: true }).then(() => writeFile(configPath, JSON.stringify({ apiKey: "aims_saved_key" })))
+  await save()
+  status = 500
+  const failed = await runCli(["logout", "--revoke", "--json"], env)
+  assert.equal(failed.code, 1)
+  assert.equal(JSON.parse(await readFile(configPath, "utf8")).apiKey, "aims_saved_key")
+  status = 200
+  const revoked = await runCli(["logout", "--revoke", "--json"], env)
+  assert.equal(revoked.code, 0, revoked.stderr)
+  assert.equal(JSON.parse(revoked.stdout).revoked, true)
+  assert.equal(JSON.parse(await readFile(configPath, "utf8")).apiKey, undefined)
+  assert.deepEqual(requests, ["DELETE /keys/current Bearer aims_saved_key", "DELETE /keys/current Bearer aims_saved_key"])
+})
+
+test("max credits come from --max-credits or AIMS_MAX_CREDITS, and a bad value stops before the API", async (t) => {
+  const home = await temporaryHome(t)
+  const received = []
+  const baseUrl = await serve(t, async (request, response) => {
+    received.push(JSON.parse(await body(request)).max_credits)
+    json(response, request.url === "/videos/generate" ? videoResult : imageBatch([completedImage]))
+  })
+  assert.equal((await runCli(["image", "test", "--max-credits", "40"], environment(home, baseUrl))).code, 0)
+  assert.equal((await runCli(["video", "test"], { ...environment(home, baseUrl), AIMS_MAX_CREDITS: "150" })).code, 0)
+  assert.equal((await runCli(["video", "test", "--max-credits", "90"], { ...environment(home, baseUrl), AIMS_MAX_CREDITS: "150" })).code, 0)
+  const bad = await runCli(["image", "test"], { ...environment(home, baseUrl), AIMS_MAX_CREDITS: "lots" })
+  assert.equal(bad.code, 2)
+  assert.match(bad.stderr, /AIMS_MAX_CREDITS must be a positive number/)
+  assert.deepEqual(received, [40, 150, 90])
+})
+
+test("keys are never sent over plain HTTP to a non-loopback host", async (t) => {
+  const home = await temporaryHome(t)
+  const output = await runCli(["whoami"], environment(home, "http://api.example.test/api/v1"))
+  assert.equal(output.code, 1)
+  assert.match(output.stderr, /must use https:\/\//)
+})

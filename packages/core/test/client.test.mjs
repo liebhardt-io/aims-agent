@@ -11,7 +11,7 @@ test("request deadline stays active after response headers arrive", { timeout: 5
     response.on("close", () => clearTimeout(timer))
   })
   const client = new AimsClient({ apiKey: "test", baseUrl, timeoutMs: 150 })
-  await assert.rejects(client.account(), (error) => error instanceof AimsApiError && error.status === 408)
+  await assert.rejects(client.account(), (error) => error instanceof AimsApiError && error.status === 0 && error.code === "CLIENT_TIMEOUT")
 })
 
 test("HTTP errors retain their status after reading the response body", async (t) => {
@@ -51,5 +51,5 @@ test("uploads use the same deadline while reading their response body", { timeou
     response.on("close", () => clearTimeout(timer))
   })
   const client = new AimsClient({ apiKey: "test", baseUrl, timeoutMs: 150 })
-  await assert.rejects(client.uploadImage(new Blob([png]), "source.png"), (error) => error instanceof AimsApiError && error.status === 408)
+  await assert.rejects(client.uploadImage(new Blob([png]), "source.png"), (error) => error instanceof AimsApiError && error.status === 0 && error.code === "CLIENT_TIMEOUT")
 })

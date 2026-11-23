@@ -63,6 +63,33 @@ export function resolveBaseUrl(explicit?: string): string {
   return raw.replace(/\/+$/, "")
 }
 
+/**
+ * Refuse to send a key in clear text: the base URL must use HTTPS unless it is
+ * a loopback address (local development and tests).
+ */
+export function assertSecureBaseUrl(baseUrl: string): void {
+  let url: URL
+  try {
+    url = new URL(baseUrl)
+  } catch {
+    throw new Error(`Invalid API base URL: ${baseUrl}`)
+  }
+  const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+    throw new Error("The API base URL must use https:// (http:// is allowed only for 127.0.0.1, localhost and [::1]).")
+  }
+}
+
+/** Optional per-call spending cap: explicit > AIMS_MAX_CREDITS. Undefined when unset. */
+export function resolveMaxCredits(explicit?: number): number | undefined {
+  if (explicit !== undefined) return explicit
+  const raw = process.env.AIMS_MAX_CREDITS
+  if (!raw) return undefined
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`AIMS_MAX_CREDITS must be a positive number (got "${raw}")`)
+  return value
+}
+
 /** Resolve the API key: explicit > AIMS_API_KEY > ~/.aims/config.json. */
 export function resolveApiKey(explicit?: string): string | undefined {
   return explicit || process.env.AIMS_API_KEY || readAimsFileConfig().apiKey

@@ -96,6 +96,7 @@ All tools return JSON (`url`, `id`, `credits_used`, `credits_remaining`). Read-o
 | `generate_video` | Text, image, reference, and start-and-end-frame video generation. |
 | `list_models` | Discover available image/video models and costs (read-only). |
 | `get_account` | Workspace id, credit balance, and scopes (read-only). |
+| `get_media` | Status and URL of one generation by id, for results still `generating` (read-only). Requires `media:read`. |
 
 Suggested order: `get_account` → `list_models` → generate. Defaults when no model is given: `fal-ai/nano-banana-pro` (images), `fal-ai/kling-video/o3/pro/text-to-video` (video). Video credits are per second.
 
@@ -103,12 +104,16 @@ For supplied image contents, call `upload_image` with raw `image_base64` and an 
 
 For a start and end frame, provide `image_url` and `last_frame_url` to a Kling, Seedance 2.0 or FLUX 3 Max image-to-video model. No current model extends videos. Reference models accept `image_urls`.
 
-Partial and total image failures return `isError: true` with the complete JSON result, including any completed images. Preserve those completed results and retry only the missing work. The server never retries paid generations automatically.
+Partial and total image failures return `isError: true` with the complete JSON result, including any completed images. Preserve those completed results and retry only images with `status: "failed"`. An image or video still `generating` is charged if it completes: call `get_media` instead of generating it again. Errors keep the server's `code`, `media_id`, and `required` fields. The server never retries paid generations automatically.
+
+The generation tools take `max_credits`; a call that would cost more is refused and charges nothing. Long calls send MCP progress notifications every 15 seconds when the client asks for progress.
 
 ## Environment (local stdio only)
 
 - `AIMS_API_KEY` (required unless CLI browser/manual login saved a key) — your `aims_` key.
-- `AIMS_BASE_URL` (optional) — defaults to `https://app.ai-media-studio.com/api/v1`. `AIMS_API_BASE_URL` is accepted as an alias.
+- `AIMS_BASE_URL` (optional): defaults to `https://app.ai-media-studio.com/api/v1`. `AIMS_API_BASE_URL` is accepted as an alias. Must use `https` except on localhost.
+- `AIMS_MAX_CREDITS` (optional): default `max_credits` for every generation tool.
+- Node.js 20 or later.
 
 ## Try it
 
